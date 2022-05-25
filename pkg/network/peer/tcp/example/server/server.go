@@ -1,0 +1,118 @@
+package main
+
+import (
+	protocol "github.com/zerogo-hub/zero-node/pkg/network/peer/tcp/example/protocol"
+
+	zerocodec "github.com/zerogo-hub/zero-helper/codec"
+	zeroprotobuf "github.com/zerogo-hub/zero-helper/codec/protobuf"
+	zerozip "github.com/zerogo-hub/zero-helper/compress/zip"
+
+	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
+	zerotcp "github.com/zerogo-hub/zero-node/pkg/network/peer/tcp"
+	zerorc4 "github.com/zerogo-hub/zero-node/pkg/security/rc4"
+)
+
+const (
+	// ModuleHello hello 模块
+	ModuleHello = 1
+
+	// ActionHelloSayReq hello 模块 客户端请求
+	ActionHelloSayReq = 1
+
+	// ActionHelloSayResp hello 模块 服务端响应
+	ActionHelloSayResp = 2
+)
+
+const (
+	secretKey = "PUmjGmE9xccKlDWV"
+)
+
+type server struct {
+	p zeronetwork.Peer
+
+	// codec 编码与解码器
+	codec zerocodec.Codec
+}
+
+func main() {
+	s := &server{
+		codec: zeroprotobuf.NewProtobufCodec(),
+	}
+
+	s.p = zerotcp.NewServer(
+		// 当服务器刚启动时
+		zerotcp.WithOnServerStart(s.onServerStart),
+		// 当服务器已关闭后
+		zerotcp.WithOnServerClose(s.onServerClose),
+
+		// 当有连接到来时
+		zerotcp.WithOnConnected(s.onConnected),
+		// 当有连接关闭时
+		zerotcp.WithOnConnClose(s.onConnClose),
+
+		// 要对消息进行压缩和解压
+		zerotcp.WithWhetherCompress(true),
+		// 指定压缩和解压的方式
+		zerotcp.WithCompress(zerozip.NewZip()),
+		// 指定压缩的阈值，负载长度超过此值才会进行压缩
+		zerotcp.WithCompressThreshold(64),
+
+		// 要对消息进行加密
+		zerotcp.WithWhetherCrypto(true),
+	)
+
+	// 注册路由
+	s.p.Router().AddRouter(ModuleHello, ActionHelloSayReq, s.reqSayHello)
+
+	s.p.Start()
+}
+
+func (s *server) onServerStart() error {
+	// 服务器启动时调用，可以添加一些初始化操作
+	s.p.Logger().Info("server start, init success")
+	return nil
+}
+
+func (s *server) onServerClose() {
+	// 服务器启动时调用，可以添加一些初始化操作
+	s.p.Logger().Info("server closed")
+}
+
+func (s *server) onConnected(session zeronetwork.Session) {
+	s.p.Logger().Infof("session: %d start", session.ID())
+
+	// 通过 dh 协议双方交换密钥用于后续加密
+	// 这里直接使用 secretKey
+	crypto, _ := zerorc4.New(secretKey)
+	session.SetCrypto(crypto)
+}
+
+func (s *server) onConnClose(session zeronetwork.Session) {
+	s.p.Logger().Infof("session: %d close", session.ID())
+}
+
+func (s *server) reqSayHello(message zeronetwork.Message) (zeronetwork.Message, error) {
+	// 客户端请求
+	req := &protocol.Req1{}
+	if err := s.codec.Unmarshal(message.Payload(), req); err != nil {
+		return nil, err
+	}
+	s.p.Logger().Infof("recv from client: %d, message: %s, name: %s, word: %s", message.SessionID(), message.String(), req.Name, req.Word)
+
+	// 响应
+	res, err := s.codec.Marshal(&protocol.Resp1{
+		Word: "respone from server",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s.newMessage(message.SN(), ModuleHello, ActionHelloSayResp, res), nil
+}
+
+func (s *server) newMessage(sn uint16, module, action uint8, payload []byte) zeronetwork.Message {
+	flag := uint16(0)
+	code := uint16(0)
+	message := zerotcp.NewMessage(flag, sn, code, module, action, payload)
+	return message
+}
