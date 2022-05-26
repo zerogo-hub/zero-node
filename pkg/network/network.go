@@ -2,8 +2,10 @@ package network
 
 import (
 	"net"
+	"time"
 
 	zerocircle "github.com/zerogo-hub/zero-helper/buffer/circle"
+	zerocompress "github.com/zerogo-hub/zero-helper/compress"
 	zerologger "github.com/zerogo-hub/zero-helper/logger"
 )
 
@@ -22,6 +24,9 @@ type CloseCallbackFunc func(session Session)
 // MessageHander 处理客户端消息
 type MessageHander func(message Message) (Message, error)
 
+// NewMessageFunc 创建一条消息
+type NewMessageFunc func(flag, sn, code uint16, module, action uint8, payload []byte) Message
+
 // Peer 服务接口，比如表示 tcp 服务，udp 服务，websocket 服务
 type Peer interface {
 	// Start 开启服务
@@ -38,6 +43,64 @@ type Peer interface {
 
 	// SessionManager 会话管理器
 	SessionManager() SessionManager
+
+	PeerOption
+}
+
+// PeerOption peer 的一些配置表设置
+type PeerOption interface {
+	// SetMaxConnNum 连接数量上限，超过数量则拒绝连接
+	// 负数表示不限制
+	SetMaxConnNum(MaxConnNum int)
+	// SetNetwork 可选 "tcp", "tcp4", "tcp6"
+	SetNetwork(network string)
+	// SetHost 设置监听地址
+	SetHost(host string)
+	// SetPort 设置监听端口
+	SetPort(port int)
+	// SetLogger 设置日志
+	SetLogger(logger zerologger.Logger)
+	// SetLoggerLevel 设置日志级别
+	// 见 https://github.com/zerogo-hub/zero-helper/blob/main/logger/logger.go
+	SetLoggerLevel(loggerLevel int)
+
+	// SetOnServerStart 服务器启动时触发，套接字监听此时尚未启动
+	SetOnServerStart(onServerStart func() error)
+	// SetOnServerClose 服务端关闭时触发，此时已关闭客户端连接
+	SetOnServerClose(onServerClose func())
+	// SetCloseTimeout 关闭服务器的等待时间，超过该时间服务器直接关闭
+	SetCloseTimeout(closeTimeout time.Duration)
+
+	// SetRecvBufferSize 在 session 中接收消息 buffer 大小
+	SetRecvBufferSize(recvBufferSize int)
+	// SetRecvDeadLine 通信超时时间，最终调用 conn.SetReadDeadline
+	SetRecvDeadLine(recvDeadLine time.Duration)
+	// SetRecvQueueSize 在 session 中接收到的消息队列大小，session 接收到消息后并非立即处理，而是丢到一个消息队列中，异步处理
+	SetRecvQueueSize(recvQueueSize int)
+
+	// SetSendBufferSize 发送消息 buffer 大小
+	SetSendBufferSize(recvBufferSize int)
+	// SetSendDeadLine SendDeadline
+	SetSendDeadLine(recvDeadLine time.Duration)
+	// SetSendQueueSize 发送的消息队列大小，消息优先发送到 sesion 的消息队列，然后写入到套接字中
+	SetSendQueueSize(recvQueueSize int)
+
+	// SetOnConnected 客户端连接到来时触发，此时客户端已经可以开始收发消息
+	SetOnConnected(onConnected ConnFunc)
+	// SetOnConnClose 客户端连接关闭触发，此时客户端不可以再收发消息
+	SetOnConnClose(onConnClose ConnFunc)
+
+	// SetDatapack 封包与解包
+	SetDatapack(datapack Datapack)
+
+	// SetWhetherCompress 是否需要对消息负载进行压缩
+	SetWhetherCompress(whetherCompress bool)
+	// SetCompressThreshold 压缩的阈值，当消息负载长度超过该值时才会压缩
+	SetCompressThreshold(compressThreshold int)
+	// SetCompress 压缩与解压器
+	SetCompress(compress zerocompress.Compress)
+	// SetWhetherCrypto 是否需要对消息负载进行加密
+	SetWhetherCrypto(whetherCrypto bool)
 }
 
 // Session 表示与客户端的一条连接，也称为会话
@@ -63,8 +126,14 @@ type Session interface {
 	// Conn 获取原始的连接
 	Conn() net.Conn
 
+	// SetConn 设置原始的链接
+	SetConn(conn net.Conn)
+
 	// SetCrypto 设置加密解密的工具
 	SetCrypto(crypto Crypto)
+
+	// Config 配置
+	Config() *Config
 }
 
 // Client 客户端，一般用来编写测试用例

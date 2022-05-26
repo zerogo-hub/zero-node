@@ -11,6 +11,7 @@ import (
 	zerozip "github.com/zerogo-hub/zero-helper/compress/zip"
 
 	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
+	zerodatapack "github.com/zerogo-hub/zero-node/pkg/network/datapack"
 	zerotcp "github.com/zerogo-hub/zero-node/pkg/network/peer/tcp"
 	zerorc4 "github.com/zerogo-hub/zero-node/pkg/security/rc4"
 )
@@ -44,24 +45,24 @@ func main() {
 
 	s.p = zerotcp.NewServer(
 		// 当服务器刚启动时
-		zerotcp.WithOnServerStart(s.onServerStart),
+		zeronetwork.WithOnServerStart(s.onServerStart),
 		// 当服务器已关闭后
-		zerotcp.WithOnServerClose(s.onServerClose),
+		zeronetwork.WithOnServerClose(s.onServerClose),
 
 		// 当有连接到来时
-		zerotcp.WithOnConnected(s.onConnected),
+		zeronetwork.WithOnConnected(s.onConnected),
 		// 当有连接关闭时
-		zerotcp.WithOnConnClose(s.onConnClose),
+		zeronetwork.WithOnConnClose(s.onConnClose),
 
 		// 要对消息进行压缩和解压
-		zerotcp.WithWhetherCompress(true),
+		zeronetwork.WithWhetherCompress(true),
 		// 指定压缩和解压的方式
-		zerotcp.WithCompress(zerozip.NewZip()),
+		zeronetwork.WithCompress(zerozip.NewZip()),
 		// 指定压缩的阈值，负载长度超过此值才会进行压缩
-		zerotcp.WithCompressThreshold(64),
+		zeronetwork.WithCompressThreshold(64),
 
 		// 要对消息进行加密
-		zerotcp.WithWhetherCrypto(true),
+		zeronetwork.WithWhetherCrypto(true),
 	)
 
 	// pprof
@@ -122,6 +123,6 @@ func (s *server) reqSayHello(message zeronetwork.Message) (zeronetwork.Message, 
 func (s *server) newMessage(sn uint16, module, action uint8, payload []byte) zeronetwork.Message {
 	flag := uint16(0)
 	code := uint16(0)
-	message := zerotcp.NewMessage(flag, sn, code, module, action, payload)
+	message := zerodatapack.NewLTDMessage(flag, sn, code, module, action, payload)
 	return message
 }

@@ -3,6 +3,7 @@ module github.com/zerogo-hub/zero-node
 go 1.18
 
 require (
+	github.com/gorilla/websocket v1.5.0
 	github.com/zerogo-hub/zero-helper v0.22.6
 	google.golang.org/protobuf v1.27.1
 )

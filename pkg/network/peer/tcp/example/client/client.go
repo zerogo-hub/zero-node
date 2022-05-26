@@ -13,6 +13,7 @@ import (
 	zerozip "github.com/zerogo-hub/zero-helper/compress/zip"
 
 	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
+	zerodatapack "github.com/zerogo-hub/zero-node/pkg/network/datapack"
 	zerotcp "github.com/zerogo-hub/zero-node/pkg/network/peer/tcp"
 	zerorc4 "github.com/zerogo-hub/zero-node/pkg/security/rc4"
 )
@@ -148,6 +149,6 @@ func (c *client) send(module, action uint8, payload []byte) error {
 	flag := uint16(0)
 	c.sn++
 	code := uint16(0)
-	message := zerotcp.NewMessage(flag, c.sn, code, module, action, payload)
+	message := zerodatapack.NewLTDMessage(flag, c.sn, code, module, action, payload)
 	return c.cc.Send(message)
 }

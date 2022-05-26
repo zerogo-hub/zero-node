@@ -1,4 +1,4 @@
-package tcp
+package datapack
 
 import (
 	"fmt"
@@ -6,9 +6,9 @@ import (
 	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
 )
 
-// messageHead 消息头
+// ltdMessageHead 消息头
 // 消息头长度 10
-type messageHead struct {
+type ltdMessageHead struct {
 	// Len 负载长度，即 Payload 中的长度
 	Len uint16
 	// Flag 标记，具体见 modules/network/flag.go
@@ -28,10 +28,10 @@ func HeadLen() int {
 	return 10
 }
 
-// message 消息
-type message struct {
+// ltdMessage 消息
+type ltdMessage struct {
 	// Head 消息头
-	head *messageHead
+	head *ltdMessageHead
 	// Payload 具体内容
 	payload []byte
 
@@ -39,10 +39,10 @@ type message struct {
 	sessionID zeronetwork.SessionID
 }
 
-// NewMessage 创建一个消息
-func NewMessage(flag, sn, code uint16, module, action uint8, payload []byte) zeronetwork.Message {
-	return &message{
-		head: &messageHead{
+// NewLTDMessage 创建一个消息
+func NewLTDMessage(flag, sn, code uint16, module, action uint8, payload []byte) zeronetwork.Message {
+	return &ltdMessage{
+		head: &ltdMessageHead{
 			Len:    uint16(len(payload)),
 			Flag:   flag,
 			SN:     sn,
@@ -55,46 +55,46 @@ func NewMessage(flag, sn, code uint16, module, action uint8, payload []byte) zer
 }
 
 // SessionID 会话 ID，每一个连接都有一个唯一的会话 ID
-func (m *message) SessionID() zeronetwork.SessionID {
+func (m *ltdMessage) SessionID() zeronetwork.SessionID {
 	return m.sessionID
 }
 
 // SetSessionID 设置 sessionID
-func (m *message) SetSessionID(sessionID zeronetwork.SessionID) {
+func (m *ltdMessage) SetSessionID(sessionID zeronetwork.SessionID) {
 	m.sessionID = sessionID
 }
 
 // Code 错误码
-func (m *message) Code() uint16 {
+func (m *ltdMessage) Code() uint16 {
 	return m.head.Code
 }
 
 // ModuleID 功能模块，用来表示一个功能大类，比如商店、副本
-func (m *message) ModuleID() uint8 {
+func (m *ltdMessage) ModuleID() uint8 {
 	return m.head.Module
 }
 
 // ActionID 功能细分，用来表示一个功能里面的具体功能，比如进入副本，退出副本
-func (m *message) ActionID() uint8 {
+func (m *ltdMessage) ActionID() uint8 {
 	return m.head.Action
 }
 
 // Flag 标记
-func (m *message) Flag() uint16 {
+func (m *ltdMessage) Flag() uint16 {
 	return m.head.Flag
 }
 
 // SN 自增编号
-func (m *message) SN() uint16 {
+func (m *ltdMessage) SN() uint16 {
 	return m.head.SN
 }
 
 // Payload 负载
-func (m *message) Payload() []byte {
+func (m *ltdMessage) Payload() []byte {
 	return m.payload
 }
 
 // String 打印信息
-func (m *message) String() string {
+func (m *ltdMessage) String() string {
 	return fmt.Sprintf("sn: %d, module: %d, action: %d", m.head.SN, m.head.Module, m.head.Action)
 }
