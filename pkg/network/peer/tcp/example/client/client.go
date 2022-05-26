@@ -96,7 +96,7 @@ func (c *client) start() {
 func (c *client) ping() {
 	for {
 		select {
-		case <-time.After(1000 * time.Millisecond):
+		case <-time.After(5000 * time.Millisecond):
 			if err := c.reqSayHello(); err != nil {
 				c.cc.Logger().Errorf("sayHelloReq failed: %s", err.Error())
 				return
@@ -122,7 +122,7 @@ func (c *client) signal() {
 
 	c.closeCh <- true
 
-	c.cc.Logger().Infof("received signal, sig: %+v, will exit", sig)
+	c.cc.Logger().Infof("received signal, sig: %+v, exit now", sig)
 }
 
 func (c *client) reqSayHello() error {

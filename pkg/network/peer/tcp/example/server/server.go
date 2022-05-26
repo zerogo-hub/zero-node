@@ -1,6 +1,9 @@
 package main
 
 import (
+	"net/http"
+	_ "net/http/pprof"
+
 	protocol "github.com/zerogo-hub/zero-node/pkg/network/peer/tcp/example/protocol"
 
 	zerocodec "github.com/zerogo-hub/zero-helper/codec"
@@ -61,6 +64,12 @@ func main() {
 		zerotcp.WithWhetherCrypto(true),
 	)
 
+	// pprof
+	go func() {
+		http.ListenAndServe("localhost:6060", nil)
+	}()
+	s.p.Logger().Info("pprof: http://localhost:6060/debug/pprof/")
+
 	// 注册路由
 	s.p.Router().AddRouter(ModuleHello, ActionHelloSayReq, s.reqSayHello)
 
@@ -79,7 +88,7 @@ func (s *server) onServerClose() {
 }
 
 func (s *server) onConnected(session zeronetwork.Session) {
-	s.p.Logger().Infof("session: %d start", session.ID())
+	s.p.Logger().Infof("session: %d connected, total: %d", session.ID(), s.p.SessionManager().Len())
 
 	// 通过 dh 协议双方交换密钥用于后续加密
 	// 这里直接使用 secretKey
@@ -88,7 +97,7 @@ func (s *server) onConnected(session zeronetwork.Session) {
 }
 
 func (s *server) onConnClose(session zeronetwork.Session) {
-	s.p.Logger().Infof("session: %d close", session.ID())
+	s.p.Logger().Infof("session: %d closed, remain: %d", session.ID(), s.p.SessionManager().Len())
 }
 
 func (s *server) reqSayHello(message zeronetwork.Message) (zeronetwork.Message, error) {

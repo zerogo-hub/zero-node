@@ -78,6 +78,11 @@ func (s *server) Router() zeronetwork.Router {
 	return s.router
 }
 
+// SessionManager 会话管理器
+func (s *server) SessionManager() zeronetwork.SessionManager {
+	return s.sessionManager
+}
+
 // listen 启动监听
 func (s *server) listen() {
 	address := fmt.Sprintf("%s:%d", s.config.host, s.config.port)
@@ -146,11 +151,16 @@ func (s *server) listen() {
 
 		// session 用于管理该连接
 		atomic.AddUint64(&s.genSessionID, 1)
-		session := newSession(s.genSessionID, conn, s.config, s.router.Handler)
+		session := newSession(s.genSessionID, conn, s.config, s.closeSession, s.router.Handler)
 		s.sessionManager.Add(session)
 
 		go session.Run()
 	}
+}
+
+// closeSession 关闭会话后的回调
+func (s *server) closeSession(session zeronetwork.Session) {
+	s.sessionManager.Del(session.ID())
 }
 
 // kickout 主动断开该会话

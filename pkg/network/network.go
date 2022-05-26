@@ -16,6 +16,9 @@ type ConnFunc func(session Session)
 // SendCallbackFunc 发送消息的回调函数
 type SendCallbackFunc func(session Session)
 
+// CloseCallbackFunc 关闭会话后的回调函数
+type CloseCallbackFunc func(session Session)
+
 // MessageHander 处理客户端消息
 type MessageHander func(message Message) (Message, error)
 
@@ -32,6 +35,9 @@ type Peer interface {
 
 	// Router 路由器
 	Router() Router
+
+	// SessionManager 会话管理器
+	SessionManager() SessionManager
 }
 
 // Session 表示与客户端的一条连接，也称为会话

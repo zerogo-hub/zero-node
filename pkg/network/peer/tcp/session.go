@@ -64,6 +64,9 @@ type session struct {
 	// closeCh 关闭会话的信号
 	closeCh chan bool
 
+	// closeCallback 关闭会话后的回调
+	closeCallback zeronetwork.CloseCallbackFunc
+
 	// crypto 消息负载的加密与解密
 	crypto zeronetwork.Crypto
 
@@ -80,15 +83,22 @@ type sendElement struct {
 }
 
 // newSession 创建一个 tcp 会话
-func newSession(sessionID zeronetwork.SessionID, conn *net.TCPConn, config *Config, handler zeronetwork.HandlerFunc) zeronetwork.Session {
+func newSession(
+	sessionID zeronetwork.SessionID,
+	conn *net.TCPConn,
+	config *Config,
+	closeCallback zeronetwork.CloseCallbackFunc,
+	handler zeronetwork.HandlerFunc,
+) zeronetwork.Session {
 	session := &session{
-		config:    config,
-		sessionID: sessionID,
-		conn:      conn,
-		sendQueue: make(chan *sendElement, config.sendQueueSize),
-		recvQueue: make(chan zeronetwork.Message, config.recvQueueSize),
-		closeCh:   make(chan bool),
-		handler:   handler,
+		config:        config,
+		sessionID:     sessionID,
+		conn:          conn,
+		sendQueue:     make(chan *sendElement, config.sendQueueSize),
+		recvQueue:     make(chan zeronetwork.Message, config.recvQueueSize),
+		closeCh:       make(chan bool),
+		closeCallback: closeCallback,
+		handler:       handler,
 	}
 
 	return session
@@ -107,6 +117,10 @@ func (s *session) Run() {
 
 // Close 停止接收客户端消息，也不再接收服务端消息。当已接收的服务端消息发送完毕后，断开连接
 func (s *session) Close() {
+	if s.isStopRecv && s.isStopSend {
+		return
+	}
+
 	s.closeOnce.Do(func() {
 		defer func() {
 			if p := recover(); p != nil {
@@ -132,7 +146,11 @@ func (s *session) Close() {
 		close(s.closeCh)
 		close(s.sendQueue)
 		close(s.recvQueue)
-		// 7 执行关闭时的触发函数
+		// 7 关闭会话后的回调
+		if s.closeCallback != nil {
+			s.closeCallback(s)
+		}
+		// 8 执行关闭时的触发函数
 		if s.config.onConnClose != nil {
 			s.config.onConnClose(s)
 		}
@@ -302,6 +320,8 @@ func (s *session) dispatchLoop() {
 					break
 				}
 			}
+		case <-s.closeCh:
+			return
 		}
 	}
 }
