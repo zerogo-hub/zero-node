@@ -12,6 +12,5 @@ func DefaultDatapck(config *zeronetwork.Config) zeronetwork.Datapack {
 		config.Compress,
 		config.WhetherCrypto,
 		config.Logger,
-		NewLTDMessage,
 	)
 }

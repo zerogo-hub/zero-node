@@ -3,6 +3,7 @@ package network
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 )
 
 var (
@@ -15,6 +16,9 @@ type sessionManager struct {
 	// sessions 存储所有连接
 	sessions map[SessionID]Session
 
+	// genSessionID 用于生成会话 ID
+	genSessionID SessionID
+
 	// lock 读写锁，保护 sessions
 	lock sync.RWMutex
 }
@@ -26,29 +30,34 @@ func NewSessionManager() SessionManager {
 	}
 }
 
-// Add 添加 Session
-func (m *sessionManager) Add(session Session) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+// GenSessionID 生成新的会话 ID
+func (s *sessionManager) GenSessionID() SessionID {
+	return atomic.AddUint64(&s.genSessionID, 1)
+}
 
-	m.sessions[session.ID()] = session
+// Add 添加 Session
+func (s *sessionManager) Add(session Session) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.sessions[session.ID()] = session
 }
 
 // Del 移除 Session
-func (m *sessionManager) Del(sessionID SessionID) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+func (s *sessionManager) Del(sessionID SessionID) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
-	if session, ok := m.sessions[sessionID]; ok {
+	if session, ok := s.sessions[sessionID]; ok {
 		session.Close()
 
-		delete(m.sessions, sessionID)
+		delete(s.sessions, sessionID)
 	}
 }
 
 // Get(sessionID SessionID) (Session, error)
-func (m *sessionManager) Get(sessionID SessionID) (Session, error) {
-	if session, ok := m.sessions[sessionID]; ok {
+func (s *sessionManager) Get(sessionID SessionID) (Session, error) {
+	if session, ok := s.sessions[sessionID]; ok {
 		return session, nil
 	}
 
@@ -56,30 +65,30 @@ func (m *sessionManager) Get(sessionID SessionID) (Session, error) {
 }
 
 // Len 获取当前 Session 数量
-func (m *sessionManager) Len() int {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
+func (s *sessionManager) Len() int {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
-	return len(m.sessions)
+	return len(s.sessions)
 }
 
 // Close 当前所有连接停止接收客户端消息，不再接收服务端消息，当已接收的服务端消息发送完毕后，断开连接
 // timeout 超时时间，如果超时仍未发送完已接收的服务端消息，也强行关闭连接
-func (m *sessionManager) Close() {
-	m.lock.Lock()
-	defer m.lock.Unlock()
+func (s *sessionManager) Close() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
-	for _, session := range m.sessions {
+	for _, session := range s.sessions {
 		session.Close()
 	}
 
 	// 清空
-	m.sessions = make(map[SessionID]Session)
+	s.sessions = make(map[SessionID]Session)
 }
 
 // Send 发送消息给客户端
-func (m *sessionManager) Send(sessionID SessionID, message Message) error {
-	session, err := m.Get(sessionID)
+func (s *sessionManager) Send(sessionID SessionID, message Message) error {
+	session, err := s.Get(sessionID)
 	if err != nil {
 		return err
 	}
@@ -88,8 +97,8 @@ func (m *sessionManager) Send(sessionID SessionID, message Message) error {
 }
 
 // SendCallback  发送消息个客户端，发送之后进行回调
-func (m *sessionManager) SendCallback(sessionID SessionID, message Message, callback SendCallbackFunc) error {
-	session, err := m.Get(sessionID)
+func (s *sessionManager) SendCallback(sessionID SessionID, message Message, callback SendCallbackFunc) error {
+	session, err := s.Get(sessionID)
 	if err != nil {
 		return err
 	}
@@ -98,11 +107,11 @@ func (m *sessionManager) SendCallback(sessionID SessionID, message Message, call
 }
 
 // SendAll 给所有客户端发送消息
-func (m *sessionManager) SendAll(message Message) {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
+func (s *sessionManager) SendAll(message Message) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
-	for _, session := range m.sessions {
+	for _, session := range s.sessions {
 		session.Send(message)
 	}
 }

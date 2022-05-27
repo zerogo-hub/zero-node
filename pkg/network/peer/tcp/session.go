@@ -27,9 +27,11 @@ var (
 // 1: sendLoop
 // 2: recvLoop
 // 3: dispatchLoop
-// 收到的消息会从 recvLoop 中放入到 recvQueue
+// 收到客户端的消息会从 recvLoop 中放入到 recvQueue
 // dispatchLoop 会处理 recvQueue 消息
 // 处理之后会将要发送的消息放入到 sendQueue
+// 服务端主动推送的消息也会放到 sendQueue
+// sendLoop 会将放在 sendQueue 中的消息发送到客户端
 type session struct {
 	// config 一些通用配置
 	config *zeronetwork.Config
@@ -67,7 +69,7 @@ type session struct {
 	// crypto 消息负载的加密与解密
 	crypto zeronetwork.Crypto
 
-	// handler 用于处理接收到的消息
+	// handler 用于处理存储于 recvQueue 中的消息
 	handler zeronetwork.HandlerFunc
 }
 
@@ -87,12 +89,19 @@ func newSession(
 	closeCallback zeronetwork.CloseCallbackFunc,
 	handler zeronetwork.HandlerFunc,
 ) zeronetwork.Session {
+
+	// 设置连接属性
+	conn.SetKeepAlive(true)
+	conn.SetNoDelay(true)
+	conn.SetReadBuffer(config.RecvBufferSize)
+	conn.SetWriteBuffer(config.SendBufferSize)
+
 	session := &session{
 		config:        config,
 		sessionID:     sessionID,
 		conn:          conn,
-		sendQueue:     make(chan *sendElement, config.SendQueueSize),
 		recvQueue:     make(chan zeronetwork.Message, config.RecvQueueSize),
+		sendQueue:     make(chan *sendElement, config.SendQueueSize),
 		closeCh:       make(chan bool),
 		closeCallback: closeCallback,
 		handler:       handler,
@@ -279,30 +288,25 @@ func (s *session) recvLoop() {
 			break
 		}
 
-		if len(messages) > 0 {
-			if err := s.dispatch(messages); err != nil {
-				s.config.Logger.Errorf("session: %d dispatch failed: %s", s.ID(), err.Error())
-				break
-			}
+		// 将消息存入缓冲队列 recvQueue 中，等待 dispatchLoop 处理
+		for _, message := range messages {
+			// 消息设置连接 ID
+			message.SetSessionID(s.sessionID)
+
+			s.recvQueue <- message
 		}
 	}
 }
 
-// dispatch 将接收到的客户端消息进行处理
-func (s *session) dispatch(messages []zeronetwork.Message) error {
-	for _, message := range messages {
-		// 消息设置连接 ID
-		message.SetSessionID(s.sessionID)
-
-		s.recvQueue <- message
-	}
-
-	return nil
-}
-
 // dispatchLoop 执行 recvQueue 中的消息
 func (s *session) dispatchLoop() {
-	defer s.Close()
+	defer func() {
+		if p := recover(); p != nil {
+			s.config.Logger.Errorf("recover p: %+v", p)
+		}
+
+		s.Close()
+	}()
 
 	for {
 		select {
@@ -316,15 +320,13 @@ func (s *session) dispatchLoop() {
 				if s.config.Logger.IsDebugAble() {
 					s.config.Logger.Debugf("session: %d, dispatch message failed: %s, message: %s", message.SessionID(), err.Error(), message.String())
 				}
-				// s.kickout(message.SessionID())
-				break
+				return
 			}
 
 			if responseMessage != nil {
 				if err := s.Send(responseMessage); err != nil {
 					s.config.Logger.Errorf("session: %d, send response message failed: %s, message: %s", message.SessionID(), err.Error(), message.String())
-					// s.kickout(message.SessionID())
-					break
+					return
 				}
 			}
 		case <-s.closeCh:
@@ -370,17 +372,17 @@ func (s *session) write(message zeronetwork.Message) error {
 	s.sendWait.Add(1)
 	defer s.sendWait.Done()
 
+	p, err := s.config.Datapack.Pack(message, s.crypto)
+	if err != nil {
+		s.config.Logger.Errorf("session: %d, pack message failed; %s, message: %s", s.ID, err.Error(), message.String())
+		return err
+	}
+
 	if s.config.SendDeadLine > 0 {
 		if err := s.conn.SetWriteDeadline(time.Now().Add(s.config.SendDeadLine)); err != nil {
 			s.config.Logger.Errorf("session: %d, set write deadline failed: %s, deadline: %d", s.ID, err.Error(), s.config.SendDeadLine)
 			return err
 		}
-	}
-
-	p, err := s.config.Datapack.Pack(message, s.crypto)
-	if err != nil {
-		s.config.Logger.Errorf("session: %d, pack message failed; %s, message: %s", s.ID, err.Error(), message.String())
-		return err
 	}
 
 	n, err := s.conn.Write(p)

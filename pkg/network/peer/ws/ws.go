@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -34,9 +33,6 @@ type server struct {
 	// sessionManager 会话管理
 	sessionManager zeronetwork.SessionManager
 
-	// genSessionID 用于生成会话 ID
-	genSessionID zeronetwork.SessionID
-
 	// closeOnce 防止多次关闭服务
 	closeOnce sync.Once
 
@@ -49,7 +45,9 @@ type server struct {
 	// router 路由
 	router zeronetwork.Router
 
-	// messageType 在 gorilla/websocket 中定义的消息类型
+	// messageType 消息类型
+	// 见 github.com/gorilla/websocket/conn.go 中的定义
+	// 如 TextMessage、BinaryMessage
 	messageType int
 }
 
@@ -77,35 +75,20 @@ func NewServer(messageType int, opts ...zeronetwork.Option) zeronetwork.Peer {
 func (s *server) Start() error {
 	address := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 
-	http.HandleFunc("/", s.wsHandler)
-
 	go func() {
 		if err := http.ListenAndServe(address, nil); err != nil {
 			s.Logger().Errorf("listen failed, address: %s, err: %s", address, err.Error())
 		}
 	}()
 
+	s.config.Logger.Infof("server start, listen at %s, pid: %d", address, os.Getpid())
+	if err := s.config.OnServerStart(); err != nil {
+		return err
+	}
+	http.HandleFunc("/", s.wsHandler)
+
 	s.signal()
 	return nil
-}
-
-// signal 监听信号
-func (s *server) signal() {
-	// ctrl + c 或者 kill
-	sigs := []os.Signal{syscall.SIGINT, syscall.SIGTERM}
-
-	ch := make(chan os.Signal)
-
-	signal.Notify(ch, sigs...)
-
-	sig := <-ch
-
-	signal.Stop(ch)
-
-	s.config.Logger.Infof("received signal, sig: %+v", sig)
-
-	// 关闭服务器
-	s.Close()
 }
 
 // Close 关闭服务，释放资源
@@ -161,49 +144,6 @@ func (s *server) Router() zeronetwork.Router {
 // SessionManager 会话管理器
 func (s *server) SessionManager() zeronetwork.SessionManager {
 	return s.sessionManager
-}
-
-// wsHandler 客户端连接过来时的处理
-// 将原本的 http 请求升级为 websocket
-func (s *server) wsHandler(w http.ResponseWriter, r *http.Request) {
-	// 服务器已经关闭
-	if s.isClosed {
-		return
-	}
-	// 此时不接收新的连接
-	if s.isCloseConn {
-		return
-	}
-
-	// 是否超出连接数量上限，关闭新的连接
-	if s.config.MaxConnNum > 0 && s.sessionManager.Len() >= s.config.MaxConnNum {
-		return
-	}
-
-	// 完成 websocket 协议的握手操作
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		return
-	}
-
-	// session 用于管理该连接
-	atomic.AddUint64(&s.genSessionID, 1)
-	session := newSession(
-		s.genSessionID,
-		conn,
-		s.config,
-		s.closeSession,
-		s.router.Handler,
-		s.messageType,
-	)
-	s.sessionManager.Add(session)
-
-	go session.Run()
-}
-
-// closeSession 关闭会话后的回调
-func (s *server) closeSession(session zeronetwork.Session) {
-	s.sessionManager.Del(session.ID())
 }
 
 // SetMaxConnNum 连接数量上限，超过数量则拒绝连接
@@ -316,4 +256,65 @@ func (s *server) SetCompress(compress zerocompress.Compress) {
 // SetWhetherCrypto 是否需要对消息负载进行加密
 func (s *server) SetWhetherCrypto(whetherCrypto bool) {
 	s.config.WhetherCrypto = whetherCrypto
+}
+
+// wsHandler 客户端连接过来时的处理
+// 将原本的 http 请求升级为 websocket
+func (s *server) wsHandler(w http.ResponseWriter, r *http.Request) {
+	// 服务器已经关闭
+	if s.isClosed {
+		return
+	}
+	// 此时不接收新的连接
+	if s.isCloseConn {
+		return
+	}
+
+	// 是否超出连接数量上限，关闭新的连接
+	if s.config.MaxConnNum > 0 && s.sessionManager.Len() >= s.config.MaxConnNum {
+		return
+	}
+
+	// 完成 websocket 协议的握手操作
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+
+	// session 用于管理该连接
+	session := newSession(
+		s.sessionManager.GenSessionID(),
+		conn,
+		s.config,
+		s.closeSession,
+		s.router.Handler,
+		s.messageType,
+	)
+	s.sessionManager.Add(session)
+
+	go session.Run()
+}
+
+// signal 监听信号
+func (s *server) signal() {
+	// ctrl + c 或者 kill
+	sigs := []os.Signal{syscall.SIGINT, syscall.SIGTERM}
+
+	ch := make(chan os.Signal)
+
+	signal.Notify(ch, sigs...)
+
+	sig := <-ch
+
+	signal.Stop(ch)
+
+	s.config.Logger.Infof("received signal, sig: %+v", sig)
+
+	// 关闭服务器
+	s.Close()
+}
+
+// closeSession 关闭会话后的回调
+func (s *server) closeSession(session zeronetwork.Session) {
+	s.sessionManager.Del(session.ID())
 }

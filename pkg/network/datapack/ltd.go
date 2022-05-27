@@ -39,28 +39,28 @@ var (
 	ErrDecompressPayload = errors.New("decompress payload failed")
 )
 
+// ltd 按 Length-Type-Data 格式进行封包与解包
+// 封装出的消息结构见 ltd-message.go/ltdMessage
 type ltd struct {
 	// headLen 消息头长度
 	headLen int
 
-	// whetherCompress 是否需要对消息负载进行压缩
+	// whetherCompress 是否需要对消息负载 payload 进行压缩
 	whetherCompress bool
 
-	// whetherCrypto 是否需要对消息负载进行加密
-	whetherCrypto bool
-
-	// compressThreshold 压缩的阈值，当消息负载长度超过该值时才会压缩
+	// compressThreshold 压缩的阈值，当消息负载 payload 长度超过该值时才会压缩
 	compressThreshold int
 
-	// compress 压缩与解压器
+	// compress 压缩与解压器，默认 zip
 	compress zerocompress.Compress
 
-	// order 字节流大端，小端问题
+	// whetherCrypto 是否需要对消息负载 payload 进行加密
+	whetherCrypto bool
+
+	// order 默认使用大端模式
 	order binary.ByteOrder
 
 	logger zerologger.Logger
-
-	newMessageFunc zeronetwork.NewMessageFunc
 }
 
 // NewLTD 创建一个封包解包工具
@@ -70,18 +70,16 @@ func NewLTD(
 	compress zerocompress.Compress,
 	whetherCrypto bool,
 	logger zerologger.Logger,
-	newMessageFunc zeronetwork.NewMessageFunc,
 ) zeronetwork.Datapack {
 	return &ltd{
-		headLen:           10,
+		headLen:           ltdHeadLen(),
 		whetherCompress:   whetherCompress,
 		compressThreshold: compressThreshold,
 		compress:          compress,
 		whetherCrypto:     whetherCrypto,
 		// 默认使用大端，zerobytes.ToUint16 也是大端模式
-		order:          binary.BigEndian,
-		logger:         logger,
-		newMessageFunc: newMessageFunc,
+		order:  binary.BigEndian,
+		logger: logger,
 	}
 }
 
@@ -250,7 +248,7 @@ func (l *ltd) Unpack(buffer *zerocircle.Circle, crypto zeronetwork.Crypto) ([]ze
 		}
 
 		// 组装一个消息
-		message := l.newMessageFunc(flag, sn, code, module, action, payload)
+		message := NewLTDMessage(flag, sn, code, module, action, payload)
 		messages = append(messages, message)
 	}
 

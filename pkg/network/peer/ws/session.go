@@ -20,12 +20,18 @@ var (
 
 	// ErrWriteTimeout 放入发送队列超时 3秒
 	ErrWriteTimeout = errors.New("write timeout")
-
-	// ErrSessionNotFound Session 未找到
-	ErrSessionNotFound = errors.New("session not found")
 )
 
-// session 会话
+// session 会话，实现 network.go/Session 接口
+// 一个会话会开启 3 个 goroutine
+// 1: sendLoop
+// 2: recvLoop
+// 3: dispatchLoop
+// 收到客户端的消息会从 recvLoop 中放入到 recvQueue
+// dispatchLoop 会处理 recvQueue 消息
+// 处理之后会将要发送的消息放入到 sendQueue
+// 服务端主动推送的消息也会放到 sendQueue
+// sendLoop 会将放在 sendQueue 中的消息发送到客户端
 type session struct {
 	// config 一些通用配置
 	config *zeronetwork.Config
@@ -33,7 +39,7 @@ type session struct {
 	// sessionID 会话 ID，每一条链接都有一个唯一的 ID
 	sessionID zeronetwork.SessionID
 
-	// conn 客户端与服务器链接成功后的原始套接字
+	// conn gorilla/websocket 的 Conn
 	conn *websocket.Conn
 
 	// closeOnce 防止多次关闭会话
@@ -231,6 +237,13 @@ func (s *session) recvLoop() {
 	var err error
 
 	for {
+		if s.config.RecvDeadLine > 0 {
+			if err := s.conn.SetReadDeadline(time.Now().Add(s.config.RecvDeadLine)); err != nil {
+				s.config.Logger.Error("session: %d, set read deadline error: %s, deadline: %d", s.ID(), err.Error(), s.config.RecvDeadLine)
+				break
+			}
+		}
+
 		_, buffer, err = s.conn.ReadMessage()
 		if err != nil {
 			break
@@ -250,25 +263,45 @@ func (s *session) recvLoop() {
 			break
 		}
 
-		if len(messages) > 0 {
-			if err := s.dispatch(messages); err != nil {
-				s.config.Logger.Errorf("session: %d dispatch failed: %s", s.ID(), err.Error())
-				break
-			}
+		// 将消息存入缓冲队列 recvQueue 中，等待 dispatchLoop 处理
+		for _, message := range messages {
+			// 消息设置连接 ID
+			message.SetSessionID(s.sessionID)
+
+			s.recvQueue <- message
 		}
 	}
 }
 
-// dispatch 将接收到的客户端消息进行处理
-func (s *session) dispatch(messages []zeronetwork.Message) error {
-	for _, message := range messages {
-		// 消息设置连接 ID
-		message.SetSessionID(s.sessionID)
+// dispatchLoop 执行 recvQueue 中的消息
+func (s *session) dispatchLoop() {
+	defer s.Close()
 
-		s.recvQueue <- message
+	for {
+		select {
+		case message, ok := <-s.recvQueue:
+			if !ok {
+				break
+			}
+
+			responseMessage, err := s.handler(message)
+			if err != nil {
+				if s.config.Logger.IsDebugAble() {
+					s.config.Logger.Debugf("session: %d, dispatch message failed: %s, message: %s", message.SessionID(), err.Error(), message.String())
+				}
+				break
+			}
+
+			if responseMessage != nil {
+				if err := s.Send(responseMessage); err != nil {
+					s.config.Logger.Errorf("session: %d, send response message failed: %s, message: %s", message.SessionID(), err.Error(), message.String())
+					break
+				}
+			}
+		case <-s.closeCh:
+			return
+		}
 	}
-
-	return nil
 }
 
 func (s *session) sendLoop() {
@@ -313,6 +346,13 @@ func (s *session) write(message zeronetwork.Message) error {
 		return err
 	}
 
+	if s.config.SendDeadLine > 0 {
+		if err := s.conn.SetWriteDeadline(time.Now().Add(s.config.SendDeadLine)); err != nil {
+			s.config.Logger.Errorf("session: %d, set write deadline failed: %s, deadline: %d", s.ID, err.Error(), s.config.SendDeadLine)
+			return err
+		}
+	}
+
 	err = s.conn.WriteMessage(s.messageType, p)
 	if err != nil {
 		s.config.Logger.Errorf("session: %d, conn write failed: %s, message: %s", s.ID, err.Error(), message.String())
@@ -320,36 +360,4 @@ func (s *session) write(message zeronetwork.Message) error {
 	}
 
 	return nil
-}
-
-func (s *session) dispatchLoop() {
-	defer s.Close()
-
-	for {
-		select {
-		case message, ok := <-s.recvQueue:
-			if !ok {
-				break
-			}
-
-			responseMessage, err := s.handler(message)
-			if err != nil {
-				if s.config.Logger.IsDebugAble() {
-					s.config.Logger.Debugf("session: %d, dispatch message failed: %s, message: %s", message.SessionID(), err.Error(), message.String())
-				}
-				// s.kickout(message.SessionID())
-				break
-			}
-
-			if responseMessage != nil {
-				if err := s.Send(responseMessage); err != nil {
-					s.config.Logger.Errorf("session: %d, send response message failed: %s, message: %s", message.SessionID(), err.Error(), message.String())
-					// s.kickout(message.SessionID())
-					break
-				}
-			}
-		case <-s.closeCh:
-			return
-		}
-	}
 }

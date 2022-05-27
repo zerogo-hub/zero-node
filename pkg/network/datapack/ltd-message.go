@@ -24,7 +24,7 @@ type ltdMessageHead struct {
 }
 
 // HeadLen 消息头长度
-func HeadLen() int {
+func ltdHeadLen() int {
 	return 10
 }
 
@@ -35,7 +35,7 @@ type ltdMessage struct {
 	// Payload 具体内容
 	payload []byte
 
-	// SessionID 会话 id
+	// sessionID 会话 id
 	sessionID zeronetwork.SessionID
 }
 

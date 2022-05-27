@@ -150,6 +150,9 @@ type Client interface {
 
 // SessionManager 会话管理器
 type SessionManager interface {
+	// GenSessionID 生成新的会话 ID
+	GenSessionID() SessionID
+
 	// Add 添加 Session
 	Add(session Session)
 
@@ -174,15 +177,6 @@ type SessionManager interface {
 
 	// SendAll 给所有客户端发送消息
 	SendAll(message Message)
-}
-
-// Crypto 加密与解密接口
-type Crypto interface {
-	// Encrypt 加密
-	Encrypt(in []byte) ([]byte, error)
-
-	// Decrypt 解密
-	Decrypt(in []byte) ([]byte, error)
 }
 
 // Message 通讯消息
@@ -213,6 +207,15 @@ type Message interface {
 
 	// String 打印消息
 	String() string
+}
+
+// Crypto 加密与解密接口
+type Crypto interface {
+	// Encrypt 加密
+	Encrypt(in []byte) ([]byte, error)
+
+	// Decrypt 解密
+	Decrypt(in []byte) ([]byte, error)
 }
 
 // Datapack 通讯数据封包与解包
