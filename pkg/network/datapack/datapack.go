@@ -8,9 +8,9 @@ import (
 func DefaultDatapck(config *zeronetwork.Config) zeronetwork.Datapack {
 	return NewLTD(
 		config.WhetherCompress,
-		config.WhetherCrypto,
 		config.CompressThreshold,
 		config.Compress,
+		config.WhetherCrypto,
 		config.Logger,
 		NewLTDMessage,
 	)

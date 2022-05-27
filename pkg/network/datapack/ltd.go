@@ -66,18 +66,18 @@ type ltd struct {
 // NewLTD 创建一个封包解包工具
 func NewLTD(
 	whetherCompress bool,
-	whetherCrypto bool,
 	compressThreshold int,
 	compress zerocompress.Compress,
+	whetherCrypto bool,
 	logger zerologger.Logger,
 	newMessageFunc zeronetwork.NewMessageFunc,
 ) zeronetwork.Datapack {
 	return &ltd{
 		headLen:           10,
 		whetherCompress:   whetherCompress,
-		whetherCrypto:     whetherCrypto,
 		compressThreshold: compressThreshold,
 		compress:          compress,
+		whetherCrypto:     whetherCrypto,
 		// 默认使用大端，zerobytes.ToUint16 也是大端模式
 		order:          binary.BigEndian,
 		logger:         logger,

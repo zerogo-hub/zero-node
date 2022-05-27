@@ -1,9 +1,9 @@
-package tcp
+package ws
 
 import (
 	"context"
 	"fmt"
-	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -11,19 +11,25 @@ import (
 	"syscall"
 	"time"
 
+	websocket "github.com/gorilla/websocket"
 	zerocompress "github.com/zerogo-hub/zero-helper/compress"
 	zerologger "github.com/zerogo-hub/zero-helper/logger"
 	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
 	zerodatapack "github.com/zerogo-hub/zero-node/pkg/network/datapack"
 )
 
-// server tcp 服务
-// 实现接口: Peer
+var (
+	upgrader = websocket.Upgrader{
+		// 允许跨域
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+)
+
+// server websocket 服务
 type server struct {
 	config *zeronetwork.Config
-
-	// ln 监听套接字
-	ln *net.TCPListener
 
 	// sessionManager 会话管理
 	sessionManager zeronetwork.SessionManager
@@ -42,14 +48,18 @@ type server struct {
 
 	// router 路由
 	router zeronetwork.Router
+
+	// messageType 在 gorilla/websocket 中定义的消息类型
+	messageType int
 }
 
-// NewServer 创建一个 tcp 服务
-func NewServer(opts ...zeronetwork.Option) zeronetwork.Peer {
+// NewServer 创建一个 websocket 服务
+func NewServer(messageType int, opts ...zeronetwork.Option) zeronetwork.Peer {
 	s := &server{
 		config:         zeronetwork.DefaultConfig(),
 		sessionManager: zeronetwork.NewSessionManager(),
 		router:         zeronetwork.NewRouter(),
+		messageType:    messageType,
 	}
 
 	for _, opt := range opts {
@@ -65,120 +75,18 @@ func NewServer(opts ...zeronetwork.Option) zeronetwork.Peer {
 
 // Start 开启服务
 func (s *server) Start() error {
-	if err := s.config.OnServerStart(); err != nil {
-		return err
-	}
+	address := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 
-	go s.listen()
+	http.HandleFunc("/", s.wsHandler)
+
+	go func() {
+		if err := http.ListenAndServe(address, nil); err != nil {
+			s.Logger().Errorf("listen failed, address: %s, err: %s", address, err.Error())
+		}
+	}()
 
 	s.signal()
 	return nil
-}
-
-// Logger 日志
-func (s *server) Logger() zerologger.Logger {
-	return s.config.Logger
-}
-
-// Router 路由器
-func (s *server) Router() zeronetwork.Router {
-	return s.router
-}
-
-// SessionManager 会话管理器
-func (s *server) SessionManager() zeronetwork.SessionManager {
-	return s.sessionManager
-}
-
-// listen 启动监听
-func (s *server) listen() {
-	address := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
-	addr, err := net.ResolveTCPAddr(s.config.Network, address)
-	if err != nil {
-		s.config.Logger.Fatalf("net.ResolveTCPAddr error: %s, network: %s, address: %s", err.Error(), s.config.Network, address)
-		return
-	}
-
-	ln, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		s.config.Logger.Fatalf("net.ListenTCP error: %s, network: %s, address: %s", err.Error(), s.config.Network, address)
-		return
-	}
-
-	// 异常退出
-	defer func() {
-		if p := recover(); p != nil {
-			s.config.Logger.Errorf("recover error: %+v", p)
-		}
-
-		s.Close()
-
-		s.config.Logger.Info("server close")
-	}()
-
-	s.ln = ln
-
-	// 监听，开始 accept
-	s.config.Logger.Infof("server start, listen at %s, pid: %d", address, os.Getpid())
-
-	for {
-		conn, err := ln.AcceptTCP()
-		if err != nil {
-			if s.isClosed {
-				break
-			}
-
-			s.config.Logger.Error(err.Error())
-			continue
-		}
-
-		// 服务器已经关闭
-		if s.isClosed {
-			conn.Close()
-			break
-		}
-
-		// 此时不接收新的连接
-		if s.isCloseConn {
-			conn.Close()
-			continue
-		}
-
-		// 是否超出连接数量上限，关闭新的连接
-		if s.config.MaxConnNum > 0 && s.sessionManager.Len() >= s.config.MaxConnNum {
-			conn.Close()
-			continue
-		}
-
-		// 设置连接属性
-		conn.SetKeepAlive(true)
-		conn.SetNoDelay(true)
-		conn.SetReadBuffer(s.config.RecvBufferSize)
-		conn.SetWriteBuffer(s.config.SendBufferSize)
-
-		// session 用于管理该连接
-		atomic.AddUint64(&s.genSessionID, 1)
-		session := newSession(
-			s.genSessionID,
-			conn,
-			s.config,
-			s.closeSession,
-			s.router.Handler,
-		)
-		s.sessionManager.Add(session)
-
-		go session.Run()
-	}
-}
-
-// closeSession 关闭会话后的回调
-func (s *server) closeSession(session zeronetwork.Session) {
-	s.sessionManager.Del(session.ID())
-}
-
-// kickout 主动断开该会话
-func (s *server) kickout(sessionID zeronetwork.SessionID) {
-	s.sessionManager.Del(sessionID)
 }
 
 // signal 监听信号
@@ -216,11 +124,6 @@ func (s *server) Close() error {
 			s.isClosed = true
 			s.isCloseConn = true
 
-			// 停止监听
-			if err := s.ln.Close(); err != nil {
-				s.config.Logger.Errorf("close listen failed: %s", err.Error())
-			}
-
 			// 关闭所有连接
 			s.sessionManager.Close()
 
@@ -243,6 +146,64 @@ func (s *server) Close() error {
 	})
 
 	return nil
+}
+
+// Logger 日志
+func (s *server) Logger() zerologger.Logger {
+	return s.config.Logger
+}
+
+// Router 路由器
+func (s *server) Router() zeronetwork.Router {
+	return s.router
+}
+
+// SessionManager 会话管理器
+func (s *server) SessionManager() zeronetwork.SessionManager {
+	return s.sessionManager
+}
+
+// wsHandler 客户端连接过来时的处理
+// 将原本的 http 请求升级为 websocket
+func (s *server) wsHandler(w http.ResponseWriter, r *http.Request) {
+	// 服务器已经关闭
+	if s.isClosed {
+		return
+	}
+	// 此时不接收新的连接
+	if s.isCloseConn {
+		return
+	}
+
+	// 是否超出连接数量上限，关闭新的连接
+	if s.config.MaxConnNum > 0 && s.sessionManager.Len() >= s.config.MaxConnNum {
+		return
+	}
+
+	// 完成 websocket 协议的握手操作
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+
+	// session 用于管理该连接
+	atomic.AddUint64(&s.genSessionID, 1)
+	session := newSession(
+		s.genSessionID,
+		conn,
+		s.config,
+		s.closeSession,
+		s.router.Handler,
+		s.messageType,
+	)
+	s.sessionManager.Add(session)
+
+	go session.Run()
+}
+
+// closeSession 关闭会话后的回调
+func (s *server) closeSession(session zeronetwork.Session) {
+	s.sessionManager.Del(session.ID())
 }
 
 // SetMaxConnNum 连接数量上限，超过数量则拒绝连接

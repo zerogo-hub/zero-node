@@ -141,6 +141,7 @@ type Client interface {
 	Session
 
 	// Connect 连接服务
+	// network: tcp,tcp4,tcp6,ws,wss
 	Connect(network, host string, port int) error
 
 	// Logger 日志
