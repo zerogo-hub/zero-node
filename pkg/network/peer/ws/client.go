@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net/url"
 	"time"
@@ -16,10 +17,13 @@ import (
 // client 实现 Session 和 Client  接口
 type client struct {
 	session
+
+	// insecureSkipVerify 是否忽略对证书的验证
+	insecureSkipVerify bool
 }
 
 // NewClient 创建一个 tcp 客户端，测试使用
-func NewClient(messageType int, handler zeronetwork.HandlerFunc, opts ...ClientOption) zeronetwork.Client {
+func NewClient(messageType int, insecureSkipVerify bool, handler zeronetwork.HandlerFunc, opts ...ClientOption) zeronetwork.Client {
 	session := newSession(
 		0,
 		nil,
@@ -29,7 +33,7 @@ func NewClient(messageType int, handler zeronetwork.HandlerFunc, opts ...ClientO
 		messageType,
 	)
 
-	c := &client{session: *session}
+	c := &client{session: *session, insecureSkipVerify: insecureSkipVerify}
 
 	for _, opt := range opts {
 		opt(c)
@@ -48,7 +52,10 @@ func (c *client) Connect(network, host string, port int) error {
 
 	u := url.URL{Scheme: network, Host: address, Path: "/"}
 
-	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	dialer := *websocket.DefaultDialer
+	dialer.TLSClientConfig = &tls.Config{InsecureSkipVerify: c.insecureSkipVerify}
+
+	conn, _, err := dialer.Dial(u.String(), nil)
 	if err != nil {
 		c.Logger().Fatalf("dial failed: %s", err.Error())
 		return err

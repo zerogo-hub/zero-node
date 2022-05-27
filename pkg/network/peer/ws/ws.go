@@ -49,15 +49,19 @@ type server struct {
 	// 见 github.com/gorilla/websocket/conn.go 中的定义
 	// 如 TextMessage、BinaryMessage
 	messageType int
+
+	certFile, keyFile string
 }
 
 // NewServer 创建一个 websocket 服务
-func NewServer(messageType int, opts ...zeronetwork.Option) zeronetwork.Peer {
+func NewServer(messageType int, certFile, keyFile string, opts ...zeronetwork.Option) zeronetwork.Peer {
 	s := &server{
 		config:         zeronetwork.DefaultConfig(),
 		sessionManager: zeronetwork.NewSessionManager(),
 		router:         zeronetwork.NewRouter(),
 		messageType:    messageType,
+		certFile:       certFile,
+		keyFile:        keyFile,
 	}
 
 	for _, opt := range opts {
@@ -76,8 +80,15 @@ func (s *server) Start() error {
 	address := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 
 	go func() {
-		if err := http.ListenAndServe(address, nil); err != nil {
-			s.Logger().Errorf("listen failed, address: %s, err: %s", address, err.Error())
+		if len(s.certFile) > 0 && len(s.keyFile) > 0 {
+			s.config.Logger.Infof("certFile: %s, keyFile: %s", s.certFile, s.keyFile)
+			if err := http.ListenAndServeTLS(address, s.certFile, s.keyFile, nil); err != nil {
+				s.Logger().Errorf("listen failed, address: %s, err: %s", address, err.Error())
+			}
+		} else {
+			if err := http.ListenAndServe(address, nil); err != nil {
+				s.Logger().Errorf("listen failed, address: %s, err: %s", address, err.Error())
+			}
 		}
 	}()
 

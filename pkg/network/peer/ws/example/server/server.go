@@ -46,6 +46,8 @@ func main() {
 
 	s.p = zerows.NewServer(
 		websocket.BinaryMessage,
+		"./ssl.crt",
+		"./ssl.key",
 		// 当服务器刚启动时
 		zeronetwork.WithOnServerStart(s.onServerStart),
 		// 当服务器已关闭后

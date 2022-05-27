@@ -59,9 +59,13 @@ func main() {
 	// 注册路由
 	c.router.AddRouter(ModuleHello, ActionHelloSayResp, c.respSayHello)
 
+	// 测试用例的 ssl 证书是自签名的，此处忽略验证
+	insecureSkipVerify := true
+
 	// 创建客户端，添加路由处理服务端的响应
 	cc := zerows.NewClient(
 		websocket.BinaryMessage,
+		insecureSkipVerify,
 		c.router.Handler,
 
 		// 要对消息进行压缩和解压
@@ -74,7 +78,7 @@ func main() {
 		// 要对消息进行加密
 		zerows.WithClientWhetherCrypto(true),
 	)
-	if err := cc.Connect("ws", "127.0.0.1", 8001); err != nil {
+	if err := cc.Connect("wss", "localhost", 8001); err != nil {
 		cc.Logger().Errorf("connect failed, err: %s", err.Error())
 		return
 	}
