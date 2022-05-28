@@ -1,12 +1,10 @@
-package ws
+package kcp
 
 import (
-	"crypto/tls"
 	"fmt"
-	"net/url"
 	"time"
 
-	websocket "github.com/gorilla/websocket"
+	kcp "github.com/xtaci/kcp-go/v5"
 
 	zerocompress "github.com/zerogo-hub/zero-helper/compress"
 	zerologger "github.com/zerogo-hub/zero-helper/logger"
@@ -17,23 +15,19 @@ import (
 // client 实现 Session 和 Client  接口
 type client struct {
 	session
-
-	// insecureSkipVerify 是否忽略对证书的验证
-	insecureSkipVerify bool
 }
 
-// NewClient 创建一个 ws 客户端，测试使用
-func NewClient(messageType int, insecureSkipVerify bool, handler zeronetwork.HandlerFunc, opts ...ClientOption) zeronetwork.Client {
+// NewClient 创建一个 kcp 客户端，测试使用
+func NewClient(handler zeronetwork.HandlerFunc, opts ...ClientOption) zeronetwork.Client {
 	session := newSession(
 		0,
 		nil,
 		zeronetwork.DefaultConfig(),
 		nil,
 		handler,
-		messageType,
 	)
 
-	c := &client{session: *session, insecureSkipVerify: insecureSkipVerify}
+	c := &client{session: *session}
 
 	for _, opt := range opts {
 		opt(c)
@@ -48,16 +42,12 @@ func NewClient(messageType int, insecureSkipVerify bool, handler zeronetwork.Han
 
 // Connect 连接服务
 func (c *client) Connect(network, host string, port int) error {
+
 	address := fmt.Sprintf("%s:%d", host, port)
 
-	u := url.URL{Scheme: network, Host: address, Path: "/"}
-
-	dialer := *websocket.DefaultDialer
-	dialer.TLSClientConfig = &tls.Config{InsecureSkipVerify: c.insecureSkipVerify}
-
-	conn, _, err := dialer.Dial(u.String(), nil)
+	conn, err := kcp.DialWithOptions(address, nil, 10, 3)
 	if err != nil {
-		c.Logger().Fatalf("dial failed: %s", err.Error())
+		c.Config().Logger.Error(err.Error())
 		return err
 	}
 

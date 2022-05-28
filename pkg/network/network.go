@@ -49,6 +49,9 @@ type Peer interface {
 
 // PeerOption peer 的一些配置表设置
 type PeerOption interface {
+	// WithOption 设置配置
+	WithOption(opts ...Option) Peer
+
 	// SetMaxConnNum 连接数量上限，超过数量则拒绝连接
 	// 负数表示不限制
 	SetMaxConnNum(MaxConnNum int)
@@ -125,9 +128,6 @@ type Session interface {
 
 	// Conn 获取原始的连接
 	Conn() net.Conn
-
-	// SetConn 设置原始的链接
-	SetConn(conn net.Conn)
 
 	// SetCrypto 设置加密解密的工具
 	SetCrypto(crypto Crypto)

@@ -41,13 +41,18 @@ type server struct {
 }
 
 // NewServer 创建一个 tcp 服务
-func NewServer(opts ...zeronetwork.Option) zeronetwork.Peer {
+func NewServer() zeronetwork.Peer {
 	s := &server{
 		config:         zeronetwork.DefaultConfig(),
 		sessionManager: zeronetwork.NewSessionManager(),
 		router:         zeronetwork.NewRouter(),
 	}
 
+	return s
+}
+
+// WithOption 设置配置
+func (s *server) WithOption(opts ...zeronetwork.Option) zeronetwork.Peer {
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -73,11 +78,13 @@ func (s *server) Start() error {
 
 // Close 关闭服务，释放资源
 func (s *server) Close() error {
-	if s.isClosed {
-		return nil
-	}
+	var once bool
 
 	s.closeOnce.Do(func() {
+		once = true
+	})
+
+	if once {
 		ctx, cancel := context.WithTimeout(context.Background(), s.config.CloseTimeout)
 		defer cancel()
 
@@ -111,7 +118,7 @@ func (s *server) Close() error {
 			s.config.Logger.Error("close timeout")
 			break
 		}
-	})
+	}
 
 	return nil
 }
@@ -285,23 +292,33 @@ func (s *server) listen() {
 			continue
 		}
 
+		remoteAddress := conn.RemoteAddr().String()
+
 		// 服务器已经关闭
 		if s.isClosed {
 			conn.Close()
+			s.Logger().Infof("reject conn, server is closed, remote remoteAddress: %s", remoteAddress)
 			break
 		}
 
 		// 此时不接收新的连接
 		if s.isCloseConn {
 			conn.Close()
+			s.Logger().Infof("reject conn, conn is closed, remote remoteAddress: %s", remoteAddress)
 			continue
 		}
 
 		// 是否超出连接数量上限，关闭新的连接
 		if s.config.MaxConnNum > 0 && s.sessionManager.Len() >= s.config.MaxConnNum {
 			conn.Close()
+			s.Logger().Infof("reject conn, max conn num, remote remoteAddress: %s", remoteAddress)
 			continue
 		}
+
+		conn.SetKeepAlive(true)
+		conn.SetNoDelay(true)
+		conn.SetReadBuffer(s.config.RecvBufferSize)
+		conn.SetWriteBuffer(s.config.SendBufferSize)
 
 		// session 用于管理该连接
 		session := newSession(
@@ -312,6 +329,7 @@ func (s *server) listen() {
 			s.router.Handler,
 		)
 		s.sessionManager.Add(session)
+		s.Logger().Infof("session: %d, address: %s connected", session.ID(), remoteAddress)
 
 		go session.Run()
 	}

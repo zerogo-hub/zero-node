@@ -4,7 +4,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
-	"github.com/gorilla/websocket"
 	protocol "github.com/zerogo-hub/zero-node/pkg/network/peer/tcp/example/protocol"
 
 	zerocodec "github.com/zerogo-hub/zero-helper/codec"
@@ -13,7 +12,7 @@ import (
 
 	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
 	zerodatapack "github.com/zerogo-hub/zero-node/pkg/network/datapack"
-	zerows "github.com/zerogo-hub/zero-node/pkg/network/peer/ws"
+	zerokcp "github.com/zerogo-hub/zero-node/pkg/network/peer/kcp"
 	zerorc4 "github.com/zerogo-hub/zero-node/pkg/security/rc4"
 )
 
@@ -44,11 +43,7 @@ func main() {
 		codec: zeroprotobuf.NewProtobufCodec(),
 	}
 
-	s.p = zerows.NewServer(
-		websocket.BinaryMessage,
-		"./ssl.crt",
-		"./ssl.key",
-	).WithOption(
+	s.p = zerokcp.NewServer().WithOption(
 		// 当服务器刚启动时
 		zeronetwork.WithOnServerStart(s.onServerStart),
 		// 当服务器已关闭后

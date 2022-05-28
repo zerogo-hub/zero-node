@@ -1,34 +1,33 @@
-package ws
+package kcp
 
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 	"time"
 
-	websocket "github.com/gorilla/websocket"
+	kcp "github.com/xtaci/kcp-go/v5"
+
 	zerocompress "github.com/zerogo-hub/zero-helper/compress"
 	zerologger "github.com/zerogo-hub/zero-helper/logger"
 	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
 	zerodatapack "github.com/zerogo-hub/zero-node/pkg/network/datapack"
 )
 
-var (
-	upgrader = websocket.Upgrader{
-		// 允许跨域
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
-)
-
-// server websocket 服务
+// server kcp 服务
+// 实现接口: Peer
 type server struct {
+	// config 通用配置
 	config *zeronetwork.Config
+
+	// kcpConfig KCP 专属配置
+	kcpConfig *Config
+
+	// ln 监听套接字
+	ln *kcp.Listener
 
 	// sessionManager 会话管理
 	sessionManager zeronetwork.SessionManager
@@ -44,24 +43,19 @@ type server struct {
 
 	// router 路由
 	router zeronetwork.Router
-
-	// messageType 消息类型
-	// 见 github.com/gorilla/websocket/conn.go 中的定义
-	// 如 TextMessage、BinaryMessage
-	messageType int
-
-	certFile, keyFile string
 }
 
-// NewServer 创建一个 websocket 服务
-func NewServer(messageType int, certFile, keyFile string) zeronetwork.Peer {
+// NewServer 创建一个 tcp 服务
+func NewServer(opts ...Option) zeronetwork.Peer {
 	s := &server{
 		config:         zeronetwork.DefaultConfig(),
+		kcpConfig:      defaultConfig(),
 		sessionManager: zeronetwork.NewSessionManager(),
 		router:         zeronetwork.NewRouter(),
-		messageType:    messageType,
-		certFile:       certFile,
-		keyFile:        keyFile,
+	}
+
+	for _, opt := range opts {
+		opt(s)
 	}
 
 	return s
@@ -82,26 +76,11 @@ func (s *server) WithOption(opts ...zeronetwork.Option) zeronetwork.Peer {
 
 // Start 开启服务
 func (s *server) Start() error {
-	address := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
-
-	go func() {
-		if len(s.certFile) > 0 && len(s.keyFile) > 0 {
-			s.config.Logger.Infof("certFile: %s, keyFile: %s", s.certFile, s.keyFile)
-			if err := http.ListenAndServeTLS(address, s.certFile, s.keyFile, nil); err != nil {
-				s.Logger().Errorf("listen failed, address: %s, err: %s", address, err.Error())
-			}
-		} else {
-			if err := http.ListenAndServe(address, nil); err != nil {
-				s.Logger().Errorf("listen failed, address: %s, err: %s", address, err.Error())
-			}
-		}
-	}()
-
-	s.config.Logger.Infof("server start, listen at %s, pid: %d", address, os.Getpid())
 	if err := s.config.OnServerStart(); err != nil {
 		return err
 	}
-	http.HandleFunc("/", s.wsHandler)
+
+	go s.listen()
 
 	s.signal()
 	return nil
@@ -124,6 +103,11 @@ func (s *server) Close() error {
 		go func() {
 			s.isClosed = true
 			s.isCloseConn = true
+
+			// 停止监听
+			if err := s.ln.Close(); err != nil {
+				s.config.Logger.Errorf("close listen failed: %s", err.Error())
+			}
 
 			// 关闭所有连接
 			s.sessionManager.Close()
@@ -276,47 +260,96 @@ func (s *server) SetWhetherCrypto(whetherCrypto bool) {
 	s.config.WhetherCrypto = whetherCrypto
 }
 
-// wsHandler 客户端连接过来时的处理
-// 将原本的 http 请求升级为 websocket
-func (s *server) wsHandler(w http.ResponseWriter, r *http.Request) {
-	remoteAddress := r.RemoteAddr
+// listen 启动监听
+func (s *server) listen() {
+	address := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 
-	// 服务器已经关闭
-	if s.isClosed {
-		s.Logger().Infof("reject conn, server is closed, remote remoteAddress: %s", remoteAddress)
-		return
-	}
-	// 此时不接收新的连接
-	if s.isCloseConn {
-		s.Logger().Infof("reject conn, conn is closed, remote remoteAddress: %s", remoteAddress)
-		return
-	}
-
-	// 是否超出连接数量上限，关闭新的连接
-	if s.config.MaxConnNum > 0 && s.sessionManager.Len() >= s.config.MaxConnNum {
-		s.Logger().Infof("reject conn, max conn num, remote remoteAddress: %s", remoteAddress)
-		return
-	}
-
-	// 完成 websocket 协议的握手操作
-	conn, err := upgrader.Upgrade(w, r, nil)
+	ln, err := kcp.ListenWithOptions(address, nil, s.kcpConfig.datashard, s.kcpConfig.parityshard)
 	if err != nil {
+		s.config.Logger.Fatalf("net.ListenTCP error: %s, network: %s, address: %s", err.Error(), s.config.Network, address)
 		return
 	}
 
-	// session 用于管理该连接
-	session := newSession(
-		s.sessionManager.GenSessionID(),
-		conn,
-		s.config,
-		s.closeSession,
-		s.router.Handler,
-		s.messageType,
-	)
-	s.sessionManager.Add(session)
-	s.Logger().Infof("sessin: %d, address: %s connected", session.ID(), remoteAddress)
+	// 异常退出
+	defer func() {
+		if p := recover(); p != nil {
+			s.config.Logger.Errorf("recover error: %+v", p)
+		}
 
-	go session.Run()
+		s.Close()
+
+		s.config.Logger.Info("server close")
+	}()
+
+	s.ln = ln
+
+	// 监听，开始 accept
+	s.config.Logger.Infof("server start, listen at %s, pid: %d", address, os.Getpid())
+
+	for {
+		conn, err := ln.AcceptKCP()
+		if err != nil {
+			if s.isClosed {
+				break
+			}
+
+			s.config.Logger.Error(err.Error())
+			continue
+		}
+
+		remoteAddress := conn.RemoteAddr().String()
+
+		// 服务器已经关闭
+		if s.isClosed {
+			conn.Close()
+			s.Logger().Infof("reject conn, server is closed, remote remoteAddress: %s", remoteAddress)
+			break
+		}
+
+		// 此时不接收新的连接
+		if s.isCloseConn {
+			conn.Close()
+			s.Logger().Infof("reject conn, conn is closed, remote remoteAddress: %s", remoteAddress)
+			continue
+		}
+
+		// 是否超出连接数量上限，关闭新的连接
+		if s.config.MaxConnNum > 0 && s.sessionManager.Len() >= s.config.MaxConnNum {
+			conn.Close()
+			s.Logger().Infof("reject conn, max conn num, remote remoteAddress: %s", remoteAddress)
+			continue
+		}
+
+		conn.SetWindowSize(s.kcpConfig.sndwnd, s.kcpConfig.rcvwnd)
+		conn.SetNoDelay(s.kcpConfig.nodelay, s.kcpConfig.interval, s.kcpConfig.resend, s.kcpConfig.nc)
+		conn.SetStreamMode(s.kcpConfig.streamMode)
+		conn.SetMtu(s.kcpConfig.mtu)
+		conn.SetReadBuffer(s.config.RecvBufferSize)
+		conn.SetWriteBuffer(s.config.SendBufferSize)
+
+		// session 用于管理该连接
+		session := newSession(
+			s.sessionManager.GenSessionID(),
+			conn,
+			s.config,
+			s.closeSession,
+			s.router.Handler,
+		)
+		s.sessionManager.Add(session)
+		s.Logger().Infof("session: %d, address: %s connected", session.ID(), remoteAddress)
+
+		go session.Run()
+	}
+}
+
+// closeSession 关闭会话后的回调
+func (s *server) closeSession(session zeronetwork.Session) {
+	s.sessionManager.Del(session.ID())
+}
+
+// kickout 主动断开该会话
+func (s *server) kickout(sessionID zeronetwork.SessionID) {
+	s.sessionManager.Del(sessionID)
 }
 
 // signal 监听信号
@@ -336,9 +369,4 @@ func (s *server) signal() {
 
 	// 关闭服务器
 	s.Close()
-}
-
-// closeSession 关闭会话后的回调
-func (s *server) closeSession(session zeronetwork.Session) {
-	s.sessionManager.Del(session.ID())
 }

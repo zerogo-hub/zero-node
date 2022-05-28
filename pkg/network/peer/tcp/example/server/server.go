@@ -43,7 +43,7 @@ func main() {
 		codec: zeroprotobuf.NewProtobufCodec(),
 	}
 
-	s.p = zerotcp.NewServer(
+	s.p = zerotcp.NewServer().WithOption(
 		// 当服务器刚启动时
 		zeronetwork.WithOnServerStart(s.onServerStart),
 		// 当服务器已关闭后

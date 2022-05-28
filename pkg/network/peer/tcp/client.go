@@ -13,7 +13,7 @@ import (
 
 // client 实现 Session 和 Client  接口
 type client struct {
-	zeronetwork.Session
+	session
 }
 
 // NewClient 创建一个 tcp 客户端，测试使用
@@ -26,7 +26,7 @@ func NewClient(handler zeronetwork.HandlerFunc, opts ...ClientOption) zeronetwor
 		handler,
 	)
 
-	c := &client{session}
+	c := &client{session: *session}
 
 	for _, opt := range opts {
 		opt(c)
@@ -55,7 +55,7 @@ func (c *client) Connect(network, host string, port int) error {
 		return err
 	}
 
-	c.SetConn(conn)
+	c.conn = conn
 
 	return nil
 }

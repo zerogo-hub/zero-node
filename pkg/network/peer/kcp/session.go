@@ -1,4 +1,4 @@
-package tcp
+package kcp
 
 import (
 	"errors"
@@ -6,6 +6,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	kcp "github.com/xtaci/kcp-go/v5"
 
 	zerocircle "github.com/zerogo-hub/zero-helper/buffer/circle"
 	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
@@ -40,7 +42,7 @@ type session struct {
 	sessionID zeronetwork.SessionID
 
 	// conn 客户端与服务器链接成功后的原始套接字，由 Accept() 生成
-	conn *net.TCPConn
+	conn *kcp.UDPSession
 
 	// closeOnce 防止多次关闭会话
 	closeOnce sync.Once
@@ -84,7 +86,7 @@ type sendElement struct {
 // newSession 创建一个 tcp 会话
 func newSession(
 	sessionID zeronetwork.SessionID,
-	conn *net.TCPConn,
+	conn *kcp.UDPSession,
 	config *zeronetwork.Config,
 	closeCallback zeronetwork.CloseCallbackFunc,
 	handler zeronetwork.HandlerFunc,

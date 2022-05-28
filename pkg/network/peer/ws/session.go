@@ -121,18 +121,20 @@ func (s *session) Run() {
 
 // Close 停止接收客户端消息，也不再接收服务端消息。当已接收的服务端消息发送完毕后，断开连接
 func (s *session) Close() {
-	if s.isStopRecv && s.isStopSend {
-		return
-	}
+	var once bool
 
 	s.closeOnce.Do(func() {
+		once = true
+	})
+
+	if once {
 		defer func() {
 			if p := recover(); p != nil {
-				s.config.Logger.Errorf("session: %d close, recover error: %s", s.ID(), p)
+				s.config.Logger.Errorf("session: %d close, recover error: %s, address: %s", s.ID(), p, s.RemoteAddr().String())
 			}
 
 			if s.config.Logger.IsDebugAble() {
-				s.config.Logger.Debugf("session: %d closed", s.ID())
+				s.config.Logger.Debugf("session: %d closed, address: %s", s.ID(), s.RemoteAddr().String())
 			}
 		}()
 
@@ -160,7 +162,7 @@ func (s *session) Close() {
 		}
 
 		s.config.Logger.Infof("session: %d closed", s.ID())
-	})
+	}
 }
 
 // Send 发送消息给客户端
@@ -203,11 +205,6 @@ func (s *session) Conn() net.Conn {
 	return s.conn.UnderlyingConn()
 }
 
-// SetConn 设置原始的链接
-func (s *session) SetConn(conn net.Conn) {
-	panic("unimplement SetConn")
-}
-
 // SetCrypto 设置加密解密的工具
 func (s *session) SetCrypto(crypto zeronetwork.Crypto) {
 	s.crypto = crypto
@@ -221,7 +218,7 @@ func (s *session) Config() *zeronetwork.Config {
 func (s *session) recvLoop() {
 	defer func() {
 		if p := recover(); p != nil {
-			s.config.Logger.Errorf("recover p: %+v", p)
+			s.config.Logger.Errorf("session: %d, recover p: %+v, address: %s", s.ID(), p, s.RemoteAddr().String())
 		}
 
 		s.Close()
@@ -275,7 +272,13 @@ func (s *session) recvLoop() {
 
 // dispatchLoop 执行 recvQueue 中的消息
 func (s *session) dispatchLoop() {
-	defer s.Close()
+	defer func() {
+		if p := recover(); p != nil {
+			s.config.Logger.Errorf("recover p: %+v, address: %s", p, s.RemoteAddr().String())
+		}
+
+		s.Close()
+	}()
 
 	for {
 		select {
@@ -307,7 +310,7 @@ func (s *session) dispatchLoop() {
 func (s *session) sendLoop() {
 	defer func() {
 		if p := recover(); p != nil {
-			s.config.Logger.Errorf("recover p: %+v", p)
+			s.config.Logger.Errorf("session: %d, recover p: %+v, address: %s", p, s.RemoteAddr().String())
 		}
 
 		s.Close()
