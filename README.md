@@ -5,7 +5,6 @@
 # 模块
 
 - actor: `Actor`模式
-- discovery: 服务注册与发现
 - ecs: `ECS`支持
 - event: 事件派发，分为本进程派发和跨进程派发
 - entity: 封装数据库与缓存的访问，要求`go 1.8` 以上
