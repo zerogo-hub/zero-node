@@ -82,7 +82,6 @@ func (s *server) Start() error {
 
 	go s.listen()
 
-	s.signal()
 	return nil
 }
 
@@ -352,8 +351,8 @@ func (s *server) kickout(sessionID zeronetwork.SessionID) {
 	s.sessionManager.Del(sessionID)
 }
 
-// signal 监听信号
-func (s *server) signal() {
+// ListenSignal 监听信号
+func (s *server) ListenSignal() {
 	// ctrl + c 或者 kill
 	sigs := []os.Signal{syscall.SIGINT, syscall.SIGTERM}
 

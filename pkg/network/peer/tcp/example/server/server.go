@@ -75,6 +75,8 @@ func main() {
 	s.p.Router().AddRouter(ModuleHello, ActionHelloSayReq, s.reqSayHello)
 
 	s.p.Start()
+
+	s.p.ListenSignal()
 }
 
 func (s *server) onServerStart() error {

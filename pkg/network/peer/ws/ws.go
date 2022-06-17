@@ -103,7 +103,6 @@ func (s *server) Start() error {
 	}
 	http.HandleFunc("/", s.wsHandler)
 
-	s.signal()
 	return nil
 }
 
@@ -319,8 +318,8 @@ func (s *server) wsHandler(w http.ResponseWriter, r *http.Request) {
 	go session.Run()
 }
 
-// signal 监听信号
-func (s *server) signal() {
+// ListenSignal 监听信号
+func (s *server) ListenSignal() {
 	// ctrl + c 或者 kill
 	sigs := []os.Signal{syscall.SIGINT, syscall.SIGTERM}
 

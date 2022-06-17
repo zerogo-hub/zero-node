@@ -29,7 +29,7 @@ type NewMessageFunc func(flag, sn, code uint16, module, action uint8, payload []
 
 // Peer 服务接口，比如表示 tcp 服务，udp 服务，websocket 服务
 type Peer interface {
-	// Start 开启服务
+	// Start 开启服务，不会阻塞
 	Start() error
 
 	// Close 关闭服务，释放资源
@@ -43,6 +43,9 @@ type Peer interface {
 
 	// SessionManager 会话管理器
 	SessionManager() SessionManager
+
+	// ListenSignal 监听信号
+	ListenSignal()
 
 	PeerOption
 }
