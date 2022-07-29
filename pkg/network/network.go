@@ -243,4 +243,7 @@ type Router interface {
 
 	// Handler 路由处理
 	Handler(message Message) (Message, error)
+
+	// SetHandlerFunc 设置自定义路由处理函数
+	SetHandlerFunc(handler HandlerFunc)
 }

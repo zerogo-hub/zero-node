@@ -63,6 +63,6 @@ func (router *router) Handler(message Message) (Message, error) {
 }
 
 // SetHandlerFunc 设置自定义处理逻辑
-func (router *router) SetHandlerFunc(handler func(Message) (Message, error)) {
+func (router *router) SetHandlerFunc(handler HandlerFunc) {
 	router.handlerFunc = handler
 }
