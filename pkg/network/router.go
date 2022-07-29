@@ -12,6 +12,9 @@ var (
 
 type router struct {
 	routes map[uint16]HandlerFunc
+
+	// 自定义处理逻辑
+	handlerFunc func(Message) (Message, error)
 }
 
 // NewRouter 创建一个路由器
@@ -49,8 +52,17 @@ func (router *router) Handler(message Message) (Message, error) {
 
 	handler, ok := router.routes[routerID]
 	if !ok {
+		if router.handlerFunc != nil {
+			return router.handlerFunc(message)
+		}
+
 		return nil, ErrHandlerNotFound
 	}
 
 	return handler(message)
+}
+
+// SetHandlerFunc 设置自定义处理逻辑
+func (router *router) SetHandlerFunc(handler func(Message) (Message, error)) {
+	router.handlerFunc = handler
 }
