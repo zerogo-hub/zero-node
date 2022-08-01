@@ -10,7 +10,7 @@ type rc4 struct {
 	cipher *stdRC4.Cipher
 }
 
-// New ..
+// New 加密和解密要分开使用
 func New(key string) (zeronetwork.Crypto, error) {
 	cipher, err := stdRC4.NewCipher([]byte(key))
 	if err != nil {
