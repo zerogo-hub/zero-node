@@ -9,14 +9,13 @@ import (
 func TestRC4(t *testing.T) {
 	words := []byte("1234abcd")
 
-	crypto1, _ := zerorc4.New("12345678")
-	encrypted, err := crypto1.Encrypt(words)
+	crypto, _ := zerorc4.New("12345678")
+	encrypted, err := crypto.Encrypt(words)
 	if err != nil {
 		t.Fatal("encrypt failed")
 	}
 
-	crypto2, _ := zerorc4.New("12345678")
-	decrypted, err := crypto2.Decrypt(encrypted)
+	decrypted, err := crypto.Decrypt(encrypted)
 	if err != nil {
 		t.Fatal("decrypt failed")
 	}
