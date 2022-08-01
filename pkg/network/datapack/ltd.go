@@ -222,9 +222,12 @@ func (l *ltd) Unpack(buffer *zerocircle.Circle, crypto zeronetwork.Crypto) ([]ze
 		action := zerobytes.ToUint8(p)
 
 		// payload 负载
-		payload, err := buffer.Get(payloadLen)
-		if err != nil {
-			return nil, ErrGetPayload
+		var payload []byte
+		if payloadLen > 0 {
+			payload, err = buffer.Get(payloadLen)
+			if err != nil {
+				return nil, ErrGetPayload
+			}
 		}
 
 		if len(payload) > 0 {
