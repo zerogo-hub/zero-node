@@ -137,6 +137,12 @@ type Session interface {
 
 	// Config 配置
 	Config() *Config
+
+	// Get 获取自定义参数
+	Get(key string) interface{}
+
+	// Set 设置自定义参数
+	Set(key string, value interface{})
 }
 
 // Client 客户端，一般用来编写测试用例

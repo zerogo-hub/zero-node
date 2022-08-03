@@ -71,6 +71,9 @@ type session struct {
 
 	// handler 用于处理存储于 recvQueue 中的消息
 	handler zeronetwork.HandlerFunc
+
+	// paramters 自定义参数
+	paramters map[string]interface{}
 }
 
 // sendElement 表示一个将要发送的消息
@@ -209,6 +212,23 @@ func (s *session) SetCrypto(crypto zeronetwork.Crypto) {
 // Config 配置
 func (s *session) Config() *zeronetwork.Config {
 	return s.config
+}
+
+// Get 获取自定义参数
+func (s *session) Get(key string) interface{} {
+	if s.paramters == nil {
+		return nil
+	}
+
+	return s.paramters[key]
+}
+
+// Set 设置自定义参数
+func (s *session) Set(key string, value interface{}) {
+	if s.paramters == nil {
+		s.paramters = make(map[string]interface{})
+	}
+	s.paramters[key] = value
 }
 
 // recvLoop 接收消息
