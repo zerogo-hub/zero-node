@@ -14,20 +14,15 @@ var (
 // sessionManager 会话管理器，实现 network.go/SessionManager 接口
 type sessionManager struct {
 	// sessions 存储所有连接
-	sessions map[SessionID]Session
+	sessions sync.Map
 
 	// genSessionID 用于生成会话 ID
 	genSessionID SessionID
-
-	// lock 读写锁，保护 sessions
-	lock sync.RWMutex
 }
 
 // NewSessionManager 创建会话管理器
 func NewSessionManager() SessionManager {
-	return &sessionManager{
-		sessions: make(map[SessionID]Session, 8192),
-	}
+	return &sessionManager{}
 }
 
 // GenSessionID 生成新的会话 ID
@@ -37,53 +32,49 @@ func (s *sessionManager) GenSessionID() SessionID {
 
 // Add 添加 Session
 func (s *sessionManager) Add(session Session) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	s.sessions[session.ID()] = session
+	s.sessions.Store(session.ID(), session)
 }
 
 // Del 移除 Session
 func (s *sessionManager) Del(sessionID SessionID) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	if session, ok := s.sessions[sessionID]; ok {
-		session.Close()
-
-		delete(s.sessions, sessionID)
+	session, ok := s.sessions.LoadAndDelete(sessionID)
+	if !ok {
+		return
 	}
+	session.(Session).Close()
 }
 
 // Get(sessionID SessionID) (Session, error)
 func (s *sessionManager) Get(sessionID SessionID) (Session, error) {
-	if session, ok := s.sessions[sessionID]; ok {
-		return session, nil
+	session, ok := s.sessions.Load(sessionID)
+	if !ok {
+		return nil, ErrSessionNotFound
 	}
 
-	return nil, ErrSessionNotFound
+	return session.(Session), nil
 }
 
 // Len 获取当前 Session 数量
 func (s *sessionManager) Len() int {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
+	total := 0
+	s.sessions.Range(func(key any, value any) bool {
+		total++
+		return true
+	})
 
-	return len(s.sessions)
+	return total
 }
 
 // Close 当前所有连接停止接收客户端消息，不再接收服务端消息，当已接收的服务端消息发送完毕后，断开连接
 // timeout 超时时间，如果超时仍未发送完已接收的服务端消息，也强行关闭连接
 func (s *sessionManager) Close() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	for _, session := range s.sessions {
-		session.Close()
-	}
+	s.sessions.Range(func(key any, value any) bool {
+		value.(Session).Close()
+		return true
+	})
 
 	// 清空
-	s.sessions = make(map[SessionID]Session)
+	s.sessions = sync.Map{}
 }
 
 // Send 发送消息给客户端
@@ -107,11 +98,10 @@ func (s *sessionManager) SendCallback(sessionID SessionID, message Message, call
 }
 
 // SendAll 给所有客户端发送消息
+// TODO 优化，利用多核发送消息
 func (s *sessionManager) SendAll(message Message) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-
-	for _, session := range s.sessions {
-		session.Send(message)
-	}
+	s.sessions.Range(func(key any, value any) bool {
+		value.(Session).Send(message)
+		return true
+	})
 }
