@@ -3,6 +3,7 @@ package ws
 import (
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/url"
 	"time"
 
@@ -15,8 +16,9 @@ import (
 )
 
 // client 实现 Session 和 Client  接口
+// 定义见 pkg/network/network.go
 type client struct {
-	session
+	ss *session
 
 	// insecureSkipVerify 是否忽略对证书的验证
 	insecureSkipVerify bool
@@ -33,7 +35,7 @@ func NewClient(messageType int, insecureSkipVerify bool, handler zeronetwork.Han
 		messageType,
 	)
 
-	c := &client{session: *session, insecureSkipVerify: insecureSkipVerify}
+	c := &client{ss: session, insecureSkipVerify: insecureSkipVerify}
 
 	for _, opt := range opts {
 		opt(c)
@@ -61,7 +63,7 @@ func (c *client) Connect(network, host string, port int) error {
 		return err
 	}
 
-	c.conn = conn
+	c.ss.conn = conn
 
 	return nil
 }
@@ -69,6 +71,61 @@ func (c *client) Connect(network, host string, port int) error {
 // Logger 日志
 func (c *client) Logger() zerologger.Logger {
 	return c.Config().Logger
+}
+
+// Run 让当前连接开始工作，比如收发消息，一般用于连接成功之后
+func (c *client) Run() {
+	c.ss.Run()
+}
+
+// Close 停止接收客户端消息，也不再接收服务端消息。当已接收的服务端消息发送完毕后，断开连接
+func (c *client) Close() {
+	c.ss.Close()
+}
+
+// Send 发送消息给客户端
+func (c *client) Send(message zeronetwork.Message) error {
+	return c.ss.Send(message)
+}
+
+// SendCallback 发送消息给客户端，发送之后响应回调函数
+func (c *client) SendCallback(message zeronetwork.Message, callback zeronetwork.SendCallbackFunc) error {
+	return c.ss.SendCallback(message, callback)
+}
+
+// ID 获取 sessionID，每一条连接都分配有一个唯一的 id
+func (c *client) ID() zeronetwork.SessionID {
+	return c.ss.ID()
+}
+
+// RemoteAddr 客户端地址信息
+func (c *client) RemoteAddr() net.Addr {
+	return c.ss.RemoteAddr()
+}
+
+// Conn 获取原始的连接
+func (c *client) Conn() net.Conn {
+	return c.ss.Conn()
+}
+
+// SetCrypto 设置加密解密的工具
+func (c *client) SetCrypto(crypto zeronetwork.Crypto) {
+	c.ss.SetCrypto(crypto)
+}
+
+// Config 配置
+func (c *client) Config() *zeronetwork.Config {
+	return c.ss.Config()
+}
+
+// Get 获取自定义参数
+func (c *client) Get(key string) interface{} {
+	return c.ss.Get(key)
+}
+
+// Set 设置自定义参数
+func (c *client) Set(key string, value interface{}) {
+	c.ss.Set(key, value)
 }
 
 // ClientOption 设置配置选项

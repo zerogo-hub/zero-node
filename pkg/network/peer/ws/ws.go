@@ -323,7 +323,7 @@ func (s *server) ListenSignal() {
 	// ctrl + c 或者 kill
 	sigs := []os.Signal{syscall.SIGINT, syscall.SIGTERM}
 
-	ch := make(chan os.Signal)
+	ch := make(chan os.Signal, 1)
 
 	signal.Notify(ch, sigs...)
 

@@ -57,7 +57,7 @@ func main() {
 	}
 
 	// 注册路由
-	c.router.AddRouter(ModuleHello, ActionHelloSayResp, c.respSayHello)
+	_ = c.router.AddRouter(ModuleHello, ActionHelloSayResp, c.respSayHello)
 
 	// 测试用例的 ssl 证书是自签名的，此处忽略验证
 	insecureSkipVerify := true
@@ -119,7 +119,7 @@ func (c *client) signal() {
 	// ctrl + c 或者 kill
 	sigs := []os.Signal{syscall.SIGINT, syscall.SIGTERM}
 
-	ch := make(chan os.Signal)
+	ch := make(chan os.Signal, 1)
 
 	signal.Notify(ch, sigs...)
 

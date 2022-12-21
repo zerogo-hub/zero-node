@@ -56,7 +56,7 @@ func main() {
 	}
 
 	// 注册路由
-	c.router.AddRouter(ModuleHello, ActionHelloSayResp, c.respSayHello)
+	_ = c.router.AddRouter(ModuleHello, ActionHelloSayResp, c.respSayHello)
 
 	// 创建客户端，添加路由处理服务端的响应
 	cc := zerotcp.NewClient(
@@ -113,7 +113,7 @@ func (c *client) signal() {
 	// ctrl + c 或者 kill
 	sigs := []os.Signal{syscall.SIGINT, syscall.SIGTERM}
 
-	ch := make(chan os.Signal)
+	ch := make(chan os.Signal, 1)
 
 	signal.Notify(ch, sigs...)
 

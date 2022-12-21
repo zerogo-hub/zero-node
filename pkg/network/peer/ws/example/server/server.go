@@ -72,14 +72,20 @@ func main() {
 
 	// pprof
 	go func() {
-		http.ListenAndServe("localhost:6060", nil)
+		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+			s.p.Logger().Errorf("ListenAndServe failed: %s", err.Error())
+		}
 	}()
 	s.p.Logger().Info("pprof: http://localhost:6060/debug/pprof/")
 
 	// 注册路由
-	s.p.Router().AddRouter(ModuleHello, ActionHelloSayReq, s.reqSayHello)
+	if err := s.p.Router().AddRouter(ModuleHello, ActionHelloSayReq, s.reqSayHello); err != nil {
+		s.p.Logger().Errorf("AddRouter failed: %s", err.Error())
+	}
 
-	s.p.Start()
+	if err := s.p.Start(); err != nil {
+		s.p.Logger().Errorf("Start failed: %s", err.Error())
+	}
 
 	s.p.ListenSignal()
 }

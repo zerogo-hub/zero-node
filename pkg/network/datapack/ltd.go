@@ -17,6 +17,9 @@ var (
 	// ErrGetPayloadLen 获取负载长度失败
 	ErrGetPayloadLen = errors.New("get payload length failed")
 
+	// ErrSkip buff 跳过失败
+	ErrSkip = errors.New("buffer skip failed")
+
 	// ErrGetFlag 获取标记失败
 	ErrGetFlag = errors.New("get flag failed")
 
@@ -187,7 +190,9 @@ func (l *ltd) Unpack(buffer *zerocircle.Circle, crypto zeronetwork.Crypto) ([]ze
 		}
 
 		// 至少有一个完整的消息
-		buffer.Skip(2)
+		if err := buffer.Skip(2); err != nil {
+			return nil, ErrSkip
+		}
 
 		// flag 标记
 		p, err = buffer.Get(2)
@@ -204,7 +209,9 @@ func (l *ltd) Unpack(buffer *zerocircle.Circle, crypto zeronetwork.Crypto) ([]ze
 		sn := zerobytes.ToUint16(p)
 
 		// code 错误码
-		buffer.Skip(2)
+		if err := buffer.Skip(2); err != nil {
+			return nil, ErrSkip
+		}
 		code := uint16(0)
 
 		// module 功能模块

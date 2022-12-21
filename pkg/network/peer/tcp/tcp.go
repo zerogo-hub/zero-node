@@ -309,15 +309,34 @@ func (s *server) listen() {
 
 		// 是否超出连接数量上限，关闭新的连接
 		if s.config.MaxConnNum > 0 && s.sessionManager.Len() >= s.config.MaxConnNum {
-			conn.Close()
+			_ = conn.Close()
 			s.Logger().Infof("reject conn, max conn num, remote remoteAddress: %s", remoteAddress)
 			continue
 		}
 
-		conn.SetKeepAlive(true)
-		conn.SetNoDelay(true)
-		conn.SetReadBuffer(s.config.RecvBufferSize)
-		conn.SetWriteBuffer(s.config.SendBufferSize)
+		if err := conn.SetKeepAlive(true); err != nil {
+			_ = conn.Close()
+			s.Logger().Infof("conn SetKeepAlive failed, remote remoteAddress: %s, err: %s", remoteAddress, err.Error())
+			continue
+		}
+
+		if err := conn.SetNoDelay(true); err != nil {
+			_ = conn.Close()
+			s.Logger().Infof("conn SetNoDelay failed, remote remoteAddress: %s, err: %s", remoteAddress, err.Error())
+			continue
+		}
+
+		if err := conn.SetReadBuffer(s.config.RecvBufferSize); err != nil {
+			_ = conn.Close()
+			s.Logger().Infof("conn SetReadBuffer failed, remote remoteAddress: %s, err: %s", remoteAddress, err.Error())
+			continue
+		}
+
+		if err := conn.SetWriteBuffer(s.config.SendBufferSize); err != nil {
+			_ = conn.Close()
+			s.Logger().Infof("conn SetWriteBuffer failed, remote remoteAddress: %s, err: %s", remoteAddress, err.Error())
+			continue
+		}
 
 		// session 用于管理该连接
 		session := newSession(
@@ -339,17 +358,12 @@ func (s *server) closeSession(session zeronetwork.Session) {
 	s.sessionManager.Del(session.ID())
 }
 
-// kickout 主动断开该会话
-func (s *server) kickout(sessionID zeronetwork.SessionID) {
-	s.sessionManager.Del(sessionID)
-}
-
 // ListenSignal 监听信号
 func (s *server) ListenSignal() {
 	// ctrl + c 或者 kill
 	sigs := []os.Signal{syscall.SIGINT, syscall.SIGTERM}
 
-	ch := make(chan os.Signal)
+	ch := make(chan os.Signal, 1)
 
 	signal.Notify(ch, sigs...)
 

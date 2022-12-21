@@ -101,7 +101,7 @@ func (s *sessionManager) SendCallback(sessionID SessionID, message Message, call
 // TODO 优化，利用多核发送消息
 func (s *sessionManager) SendAll(message Message) {
 	s.sessions.Range(func(key any, value any) bool {
-		value.(Session).Send(message)
+		_ = value.(Session).Send(message)
 		return true
 	})
 }

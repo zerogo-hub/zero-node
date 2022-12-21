@@ -7,6 +7,9 @@ mod:
 	go mod verify
 	go mod vendor
 
+lint:
+	golangci-lint run
+
 # 创建自签名的 ssl 证书
 # 输入 common name 时，输入对应的域名，或者输入 127.0.0.1
 # 创建好的证书: network/peer/ws/example/server
