@@ -84,14 +84,16 @@ func (s *server) WithOption(opts ...zeronetwork.Option) zeronetwork.Peer {
 func (s *server) Start() error {
 	address := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 
+	serveMux := http.NewServeMux()
+
 	go func() {
 		if len(s.certFile) > 0 && len(s.keyFile) > 0 {
 			s.config.Logger.Infof("certFile: %s, keyFile: %s", s.certFile, s.keyFile)
-			if err := http.ListenAndServeTLS(address, s.certFile, s.keyFile, nil); err != nil {
+			if err := http.ListenAndServeTLS(address, s.certFile, s.keyFile, serveMux); err != nil {
 				s.Logger().Errorf("listen failed, address: %s, err: %s", address, err.Error())
 			}
 		} else {
-			if err := http.ListenAndServe(address, nil); err != nil {
+			if err := http.ListenAndServe(address, serveMux); err != nil {
 				s.Logger().Errorf("listen failed, address: %s, err: %s", address, err.Error())
 			}
 		}
@@ -101,7 +103,7 @@ func (s *server) Start() error {
 	if err := s.config.OnServerStart(); err != nil {
 		return err
 	}
-	http.HandleFunc("/", s.wsHandler)
+	serveMux.HandleFunc("/", s.wsHandler)
 
 	return nil
 }
