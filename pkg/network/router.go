@@ -50,16 +50,18 @@ func (router *router) AddRouter(module, action uint8, handler HandlerFunc) error
 func (router *router) Handler(message Message) (Message, error) {
 	routerID := RouterID(message.ModuleID(), message.ActionID())
 
+	// 已注册的路由中进行数据处理
 	handler, ok := router.routes[routerID]
-	if !ok {
-		if router.handlerFunc != nil {
-			return router.handlerFunc(message)
-		}
-
-		return nil, ErrHandlerNotFound
+	if ok {
+		return handler(message)
 	}
 
-	return handler(message)
+	// 尚未注册的路由进行额外处理
+	if router.handlerFunc != nil {
+		return router.handlerFunc(message)
+	}
+
+	return nil, ErrHandlerNotFound
 }
 
 // SetHandlerFunc 设置自定义处理逻辑
