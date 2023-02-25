@@ -4,7 +4,6 @@
 
 # 模块
 
-- ecs: `ECS`支持
 - network: 网络模块，支持`tcp`、`kcp`和`websocket`
   - 使用[kcp-go](https://github.com/xtaci/kcp-go)实现`kcp`
   - 使用[gorilla/websocket](https://github.com/gorilla/websocket)实现`websocket`
