@@ -8,7 +8,7 @@ import (
 
 	zerocodec "github.com/zerogo-hub/zero-helper/codec"
 	zeroprotobuf "github.com/zerogo-hub/zero-helper/codec/protobuf"
-	zerozip "github.com/zerogo-hub/zero-helper/compress/zip"
+	zerozlib "github.com/zerogo-hub/zero-helper/compress/zlib"
 
 	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
 	zerodatapack "github.com/zerogo-hub/zero-node/pkg/network/datapack"
@@ -57,7 +57,7 @@ func main() {
 		// 要对消息进行压缩和解压
 		zeronetwork.WithWhetherCompress(true),
 		// 指定压缩和解压的方式
-		zeronetwork.WithCompress(zerozip.NewZip()),
+		zeronetwork.WithCompress(zerozlib.NewZlib()),
 		// 指定压缩的阈值，负载长度超过此值才会进行压缩
 		zeronetwork.WithCompressThreshold(64),
 
