@@ -12,7 +12,7 @@ type rc4 struct {
 	cipherDe *stdRC4.Cipher
 }
 
-// New 加密和解密要分开使用
+// New 加密和解密要分别创建实例
 func New(key string) (zeronetwork.Crypto, error) {
 	cipherEn, err := stdRC4.NewCipher([]byte(key))
 	if err != nil {

@@ -98,7 +98,7 @@ func (s *sessionManager) SendCallback(sessionID SessionID, message Message, call
 }
 
 // SendAll 给所有客户端发送消息
-// TODO 优化，利用多核发送消息
+// TODO 优化，利用多核发送消息，当前是遍历发送
 func (s *sessionManager) SendAll(message Message) {
 	s.sessions.Range(func(key any, value any) bool {
 		_ = value.(Session).Send(message)

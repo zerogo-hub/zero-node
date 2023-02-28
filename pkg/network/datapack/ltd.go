@@ -63,6 +63,7 @@ type ltd struct {
 	// order 默认使用大端模式
 	order binary.ByteOrder
 
+	// logger 日志
 	logger zerologger.Logger
 }
 
@@ -171,7 +172,7 @@ func (l *ltd) Unpack(buffer *zerocircle.Circle, crypto zeronetwork.Crypto) ([]ze
 		bufferLen := buffer.Len()
 
 		if bufferLen < l.headLen {
-			// 消息内容连消息头都无法存放，目前这不是一个完整的消息
+			// 内容连消息头都无法存放完，目前这不是一个完整的消息
 			break
 		}
 
@@ -184,7 +185,7 @@ func (l *ltd) Unpack(buffer *zerocircle.Circle, crypto zeronetwork.Crypto) ([]ze
 
 		// 判断是否满足至少一个消息
 		if bufferLen < l.headLen+payloadLen {
-			// 当前消息长度 < 消息头长度 + 负载长度
+			// 当前内容长度 < 消息头长度 + 负载长度
 			// 目前这不是一个完整的消息
 			break
 		}

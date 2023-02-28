@@ -16,12 +16,17 @@ type Config struct {
 	MaxConnNum int
 
 	// Network 可选 "tcp", "tcp4", "tcp6"
+	// 默认 tcp4
 	Network string
-	Host    string
-	Port    int
+	// Host 地址
+	// 默认 127.0.0.1
+	Host string
+	// Port 端口
+	// 默认 8001
+	Port int
 
 	Logger zerologger.Logger
-	// loggerLevel 日志级别
+	// LoggerLevel 日志级别
 	// 见 https://github.com/zerogo-hub/zero-helper/blob/main/logger/logger.go
 	LoggerLevel int
 
@@ -32,26 +37,31 @@ type Config struct {
 	OnServerClose func()
 
 	// CloseTimeout 关闭服务器的等待时间，超过该时间服务器直接关闭
+	// 默认 5 秒
 	CloseTimeout time.Duration
 
 	// --------------------------- 会话 ---------------------------
 
 	// RecvBufferSize 在 session 中接收消息 buffer 大小
+	// 默认 8K
 	RecvBufferSize int
 
 	// RecvDeadLine 通信超时时间，最终调用 conn.SetReadDeadline
 	RecvDeadLine time.Duration
 
-	// RecvQueueSize 在 session 中接收到的消息队列大小，session 接收到消息后并非立即处理，而是丢到一个消息队列中，异步处理
+	// RecvQueueSize 每一个 session 的接收消息队列大小，session 接收到消息后并非立即处理，而是丢到一个消息队列中，异步处理
+	// 默认 128
 	RecvQueueSize int
 
 	// SendBufferSize 发送消息 buffer 大小
+	// 默认 8K
 	SendBufferSize int
 
 	// SendDeadLine SendDeadline
 	SendDeadLine time.Duration
 
-	// SendQueueSize 发送的消息队列大小，消息优先发送到 sesion 的消息队列，然后写入到套接字中
+	// SendQueueSize 每一个 session 的发送消息队列大小，消息优先发送到 sesion 的消息队列，然后写入到套接字中
+	// 默认 128
 	SendQueueSize int
 
 	// OnConnected 客户端连接到来时触发，此时客户端已经可以开始收发消息
@@ -60,18 +70,21 @@ type Config struct {
 	// OnConnClose 客户端连接关闭触发，此时客户端不可以再收发消息
 	OnConnClose ConnFunc
 
+	// --------------------------- 封包与解包 ---------------------------
+
 	// Datapack 封包与解包
 	Datapack Datapack
 
-	// --------------------------- 封包与解包 ---------------------------
-
 	// WhetherCompress 是否需要对消息负载进行压缩
+	// 默认 false
 	WhetherCompress bool
 
 	// WhetherCrypto 是否需要对消息负载进行加密
+	// 默认 false
 	WhetherCrypto bool
 
 	// CompressThreshold 压缩的阈值，当消息负载长度超过该值时才会压缩
+	// 默认 0
 	CompressThreshold int
 
 	// Compress 压缩与解压器
