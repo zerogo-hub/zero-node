@@ -64,6 +64,7 @@ type session struct {
 	closeCh chan bool
 
 	// closeCallback 关闭会话后的回调
+	// 先于 config.OnConnClose 触发
 	closeCallback zeronetwork.CloseCallbackFunc
 
 	// crypto 消息负载的加密与解密
@@ -122,7 +123,7 @@ func (s *session) Run() {
 	s.sendLoop()
 }
 
-// Close 停止接收客户端消息，也不再接收服务端消息。当已接收的服务端消息发送完毕后，断开连接
+// Close 关闭，停止接收客户端消息，也不再接收服务端消息。当已接收的服务端消息发送完毕后，断开连接
 func (s *session) Close() {
 	var once bool
 
@@ -145,24 +146,31 @@ func (s *session) Close() {
 		s.isStopRecv = true
 		// 2 停止发送来自服务端的消息
 		s.isStopSend = true
-		// 3 等待发送队列中的消息发送完毕
-		s.sendWait.Wait()
-		// 4 关闭接收与发送循环
-		s.closeCh <- true
-		// 5 关闭套接字连接
-		s.conn.Close()
-		// 6 关闭所有通道
-		close(s.closeCh)
-		close(s.sendQueue)
-		close(s.recvQueue)
-		// 7 关闭会话后的回调
+
+		// 3 关闭会话后的回调
 		if s.closeCallback != nil {
 			s.closeCallback(s)
 		}
-		// 8 执行关闭时的触发函数
+		// 4 执行关闭时的触发函数
 		if s.config.OnConnClose != nil {
 			s.config.OnConnClose(s)
 		}
+
+		// closeCallback 与 OnConnClose 优先于 s.sendWait.Wait() 处理
+		// 一般这里存放角色下线处理，如保存数据等
+		// 如果在 s.sendWait.Wait() 之后，会受到超时影响，造成数据丢失
+
+		// 5 等待发送队列中的消息发送完毕
+		// FIXME: 超时处理
+		s.sendWait.Wait()
+		// 6 关闭接收与发送循环
+		s.closeCh <- true
+		// 7 关闭套接字连接
+		s.conn.Close()
+		// 8 关闭所有通道
+		close(s.closeCh)
+		close(s.sendQueue)
+		close(s.recvQueue)
 
 		s.config.Logger.Infof("session: %d closed", s.ID())
 	}
