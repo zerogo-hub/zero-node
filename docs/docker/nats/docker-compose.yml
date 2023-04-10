@@ -1,0 +1,92 @@
+version: "3.5"
+services:
+  # --------------------------------------------- nats 集群 ---------------------------------------------
+  #
+  # 注意: 如没有必要，端口不要对外开放
+  #
+  # ----------------------------- 测试
+  #
+  # curl http://127.0.0.1:8092/routez
+  #
+  zero.nats1:
+    container_name: zero.nats1
+    image: nats:alpine3.17
+    command:
+      # - "--debug"
+      - "--cluster_name"
+      - "zero.nats"
+      - "--cluster"
+      - "nats://0.0.0.0:6222"
+      - "--http_port"
+      - "8222"
+      - "--port"
+      - "4222"
+      - "--user"
+      - "dgwmSRkvt8GFPFXM"
+      - "--pass"
+      - "dVfa4B1oTNFGvtFb"
+    ports:
+      # 4222 is for clients.
+      # 8222 is an HTTP management port for information reporting.
+      # 6222 is a routing port for clustering.
+      - "8091:4222"
+      - "8092:8222"
+    networks:
+      persist:
+        ipv4_address: 172.19.10.21
+  zero.nats2:
+    container_name: zero.nats2
+    image: nats:alpine3.17
+    command:
+      # - "--debug"
+      - "--cluster_name"
+      - "zero.nats"
+      - "--cluster"
+      - "nats://0.0.0.0:6222"
+      - "--http_port"
+      - "8222"
+      - "--port"
+      - "4222"
+      - "--routes"
+      - "nats://dgwmSRkvt8GFPFXM:dVfa4B1oTNFGvtFb@zero.nats1:6222"
+      - "--user"
+      - "dgwmSRkvt8GFPFXM"
+      - "--pass"
+      - "dVfa4B1oTNFGvtFb"
+    ports:
+      - "8093:4222"
+      - "8094:8222"
+    networks:
+      persist:
+        ipv4_address: 172.19.10.22
+  zero.nats3:
+    container_name: zero.nats3
+    image: nats:alpine3.17
+    command:
+      # - "--debug"
+      - "--cluster_name"
+      - "zero.nats"
+      - "--cluster"
+      - "nats://0.0.0.0:6222"
+      - "--http_port"
+      - "8222"
+      - "--port"
+      - "4222"
+      - "--routes"
+      - "nats://dgwmSRkvt8GFPFXM:dVfa4B1oTNFGvtFb@zero.nats1:6222"
+      - "--user"
+      - "dgwmSRkvt8GFPFXM"
+      - "--pass"
+      - "dVfa4B1oTNFGvtFb"
+    ports:
+      - "8095:4222"
+      - "8096:8222"
+    networks:
+      persist:
+        ipv4_address: 172.19.10.23
+networks:
+  # 连接到外部已存在的网络
+  # 由 docs/docker/etcd/docker-compose.yml 创建的网络
+  persist:
+    external:
+      name: etcd_zero.network

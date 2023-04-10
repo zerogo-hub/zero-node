@@ -51,7 +51,7 @@ type ltd struct {
 	// whetherCompress 是否需要对消息负载 payload 进行压缩
 	whetherCompress bool
 
-	// compressThreshold 压缩的阈值，当消息负载 payload 长度超过该值时才会压缩
+	// compressThreshold 压缩的阈值，当消息负载 payload 长度不小于该值时才会压缩
 	compressThreshold int
 
 	// compress 压缩与解压器，默认 zip

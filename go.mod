@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/gorilla/websocket v1.5.0
+	github.com/nats-io/nats.go v1.25.0
 	github.com/xtaci/kcp-go/v5 v5.6.2
 	github.com/zerogo-hub/zero-helper v0.38.9
 	google.golang.org/protobuf v1.28.1
@@ -14,6 +15,9 @@ require (
 	github.com/klauspost/reedsolomon v1.11.7 // indirect
 	github.com/lestrrat/go-file-rotatelogs v0.0.0-20180223000712-d3151e2a480f // indirect
 	github.com/lestrrat/go-strftime v0.0.0-20180220042222-ba3bf9c1d042 // indirect
+	github.com/nats-io/nats-server/v2 v2.9.15 // indirect
+	github.com/nats-io/nkeys v0.4.4 // indirect
+	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rifflock/lfshook v0.0.0-20180920164130-b9218ef580f5 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect

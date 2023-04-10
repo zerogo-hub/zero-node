@@ -1,0 +1,146 @@
+version: "3.5"
+services:
+  # --------------------------------------------- etcd 集群 ---------------------------------------------
+  #
+  # 注意: 如没有必要，端口不要对外开放
+  #
+  # ----------------------------- 添加账号密码
+  #
+  # 1. 在其中一个节点创建账号密码
+  # docker exec -it zero.etcd1 etcdctl user add root:LdKysuGZWun15gGT
+  #
+  # 2. 开启认证
+  # docker exec -it zero.etcd1 etcdctl auth enable
+  # {"level":"warn","ts":"2023-04-01T12:40:05.246Z","logger":"etcd-client","caller":"v3@v3.5.7/retry_interceptor.go:62","msg":"retrying of unary invoker failed","target":"etcd-endpoints://0xc000358a80/127.0.0.1:2379","attempt":0,"error":"rpc error: code = FailedPrecondition desc = etcdserver: root user does not have root role"}
+  # Authentication Enabled
+  #
+  # ----------------------------- 测试
+  #
+  # 查看集群内的成员列表
+  # docker exec -it zero.etcd1 etcdctl -w table member list
+  #
+  # 查看指定节点状态
+  # docker exec -it zero.etcd1 etcdctl -w table endpoint status
+  #
+  # 查看指定节点健康状态
+  # docker exec -it zero.etcd1 etcdctl -w table endpoint health
+  #
+  # 测试
+  # 登录节点 1
+  # docker exec -it zero.etcd1 sh
+  # 在节点 1 写入数据
+  # etcdctl --user root:LdKysuGZWun15gGT put name "zero"
+  # 登录节点 2
+  # docker exec -it zero.etcd2 sh
+  # 在节点 2 获取数据
+  # etcdctl --user root:LdKysuGZWun15gGT get name
+  # 输出:
+  # name
+  # zero
+  #
+  zero.etcd1:
+    container_name: zero.etcd1
+    image: quay.io/coreos/etcd:v3.4.20
+    environment:
+      # 是否允许不验证登录
+      - ALLOW_NONE_AUTHENTICATION=no
+      # etcd 的名字
+      - ETCD_NAME=zero.etcd1
+      # 列出这个成员的伙伴 URL 以便通告给集群的其他成员
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://zero.etcd1:2380
+      # 用于监听伙伴通讯的URL列表
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      # 用于监听客户端通讯的URL列表
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      # 列出这个成员的客户端URL，通告给集群中的其他成员
+      - ETCD_ADVERTISE_CLIENT_URLS=http://zero.etcd1:2379
+      # 在启动期间用于 etcd 集群的初始化集群记号
+      - ETCD_INITIAL_CLUSTER_TOKEN=zero-etcd-cluster
+      # 为启动初始化集群配置
+      - ETCD_INITIAL_CLUSTER=zero.etcd1=http://zero.etcd1:2380,zero.etcd2=http://zero.etcd2:2380,zero.etcd3=http://zero.etcd3:2380
+      # 初始化集群状态
+      - ETCD_INITIAL_CLUSTER_STATE=new
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+    ports:
+      - 8081:2379
+      - 8082:2380
+    networks:
+      zero.network: # 自定义网络, 见最下方networks
+        ipv4_address: 172.19.10.11
+  zero.etcd2:
+    container_name: zero.etcd2
+    image: quay.io/coreos/etcd:v3.4.20
+    environment:
+      # 是否允许不验证登录
+      - ALLOW_NONE_AUTHENTICATION=no
+      # etcd 的名字
+      - ETCD_NAME=zero.etcd2
+      # 列出这个成员的伙伴 URL 以便通告给集群的其他成员
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://zero.etcd2:2380
+      # 用于监听伙伴通讯的URL列表
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      # 用于监听客户端通讯的URL列表
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      # 列出这个成员的客户端URL，通告给集群中的其他成员
+      - ETCD_ADVERTISE_CLIENT_URLS=http://zero.etcd2:2379
+      # 在启动期间用于 etcd 集群的初始化集群记号
+      - ETCD_INITIAL_CLUSTER_TOKEN=zero-etcd-cluster
+      # 为启动初始化集群配置
+      - ETCD_INITIAL_CLUSTER=zero.etcd1=http://zero.etcd1:2380,zero.etcd2=http://zero.etcd2:2380,zero.etcd3=http://zero.etcd3:2380
+      # 初始化集群状态
+      - ETCD_INITIAL_CLUSTER_STATE=new
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+    ports:
+      - 8083:2379
+      - 8084:2380
+    networks:
+      zero.network: # 自定义网络, 见最下方networks
+        ipv4_address: 172.19.10.12
+  zero.etcd3:
+    container_name: zero.etcd3
+    image: quay.io/coreos/etcd:v3.4.20
+    environment:
+      # 是否允许不验证登录
+      - ALLOW_NONE_AUTHENTICATION=no
+      # etcd 的名字
+      - ETCD_NAME=zero.etcd3
+      # 列出这个成员的伙伴 URL 以便通告给集群的其他成员
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://zero.etcd3:2380
+      # 用于监听伙伴通讯的URL列表
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      # 用于监听客户端通讯的URL列表
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      # 列出这个成员的客户端URL，通告给集群中的其他成员
+      - ETCD_ADVERTISE_CLIENT_URLS=http://zero.etcd3:2379
+      # 在启动期间用于 etcd 集群的初始化集群记号
+      - ETCD_INITIAL_CLUSTER_TOKEN=zero-etcd-cluster
+      # 为启动初始化集群配置
+      - ETCD_INITIAL_CLUSTER=zero.etcd1=http://zero.etcd1:2380,zero.etcd2=http://zero.etcd2:2380,zero.etcd3=http://zero.etcd3:2380
+      # 初始化集群状态
+      - ETCD_INITIAL_CLUSTER_STATE=new
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+    ports:
+      - 8085:2379
+      - 8086:2380
+    networks:
+      zero.network: # 自定义网络, 见最下方networks
+        ipv4_address: 172.19.10.13
+networks:
+  zero.network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.19.10.0/24

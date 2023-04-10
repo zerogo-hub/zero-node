@@ -39,7 +39,7 @@ type server struct {
 	// isClosed 服务器已关闭
 	isClosed bool
 
-	// isCloseConn 服务器不再接收连接
+	// isCloseConn 服务器不再接收新连接
 	isCloseConn bool
 
 	// router 路由
