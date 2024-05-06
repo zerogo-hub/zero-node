@@ -71,6 +71,9 @@ func main() {
 
 		// 要对消息进行加密
 		zerotcp.WithClientWhetherCrypto(true),
+
+		// 启用校验值
+		zerotcp.WithClientWhetherChecksum(true),
 	)
 	if err := cc.Connect("tcp4", "127.0.0.1", 8001); err != nil {
 		cc.Logger().Errorf("connect failed, err: %s", err.Error())

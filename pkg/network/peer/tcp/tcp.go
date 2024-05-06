@@ -66,8 +66,10 @@ func (s *server) WithOption(opts ...zeronetwork.Option) zeronetwork.Peer {
 
 // Start 开启服务
 func (s *server) Start() error {
-	if err := s.config.OnServerStart(); err != nil {
-		return err
+	if s.config.OnServerStart != nil {
+		if err := s.config.OnServerStart(); err != nil {
+			return err
+		}
 	}
 
 	go s.listen()
@@ -145,17 +147,30 @@ func (s *server) SetMaxConnNum(MaxConnNum int) {
 
 // SetNetwork 可选 "tcp", "tcp4", "tcp6"
 func (s *server) SetNetwork(network string) {
-	s.config.Network = network
+	switch network {
+	case "tcp", "tcp4", "tcp6":
+		s.config.Network = network
+	default:
+		s.config.Network = "tcp"
+	}
 }
 
 // SetHost 设置监听地址
 func (s *server) SetHost(host string) {
-	s.config.Host = host
+	if len(host) > 0 {
+		s.config.Host = host
+	} else {
+		s.config.Host = "127.0.0.1"
+	}
 }
 
 // SetPort 设置监听端口
 func (s *server) SetPort(port int) {
-	s.config.Port = port
+	if port > 1024 {
+		s.config.Port = port
+	} else {
+		s.config.Port = 8001
+	}
 }
 
 // SetLogger 设置日志
@@ -189,9 +204,9 @@ func (s *server) SetRecvBufferSize(recvBufferSize int) {
 	s.config.RecvBufferSize = recvBufferSize
 }
 
-// SetRecvDeadLine 通信超时时间，最终调用 conn.SetReadDeadline
-func (s *server) SetRecvDeadLine(recvDeadLine time.Duration) {
-	s.config.RecvDeadLine = recvDeadLine
+// SetRecvDeadline 通信超时时间，最终调用 conn.SetReadDeadline
+func (s *server) SetRecvDeadline(recvDeadLine time.Duration) {
+	s.config.RecvDeadline = recvDeadLine
 }
 
 // SetRecvQueueSize 在 session 中接收到的消息队列大小，session 接收到消息后并非立即处理，而是丢到一个消息队列中，异步处理
@@ -204,9 +219,9 @@ func (s *server) SetSendBufferSize(recvBufferSize int) {
 	s.config.RecvBufferSize = recvBufferSize
 }
 
-// SetSendDeadLine SendDeadline
-func (s *server) SetSendDeadLine(recvDeadLine time.Duration) {
-	s.config.RecvDeadLine = recvDeadLine
+// SetSendDeadline SendDeadline
+func (s *server) SetSendDeadline(recvDeadLine time.Duration) {
+	s.config.RecvDeadline = recvDeadLine
 }
 
 // SetSendQueueSize 发送的消息队列大小，消息优先发送到 sesion 的消息队列，然后写入到套接字中
@@ -249,6 +264,11 @@ func (s *server) SetWhetherCrypto(whetherCrypto bool) {
 	s.config.WhetherCrypto = whetherCrypto
 }
 
+// SetWhetherChecksum 是否启用校验值功能，默认 false
+func (s *server) SetWhetherChecksum(whetherChecksum bool) {
+	s.config.WhetherChecksum = whetherChecksum
+}
+
 // listen 启动监听
 func (s *server) listen() {
 	address := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
@@ -258,7 +278,7 @@ func (s *server) listen() {
 		return
 	}
 
-	ln, err := net.ListenTCP("tcp", addr)
+	ln, err := net.ListenTCP(s.config.Network, addr)
 	if err != nil {
 		s.config.Logger.Fatalf("net.ListenTCP error: %s, network: %s, address: %s", err.Error(), s.config.Network, address)
 		return
@@ -278,7 +298,7 @@ func (s *server) listen() {
 	s.ln = ln
 
 	// 监听，开始 accept
-	s.config.Logger.Infof("server start, listen at %s, pid: %d", address, os.Getpid())
+	s.config.Logger.Infof("server start, listen at %s, fid: %d, pid: %d", address, os.Getppid(), os.Getpid())
 
 	for {
 		conn, err := ln.AcceptTCP()
@@ -361,7 +381,7 @@ func (s *server) closeSession(session zeronetwork.Session) {
 // ListenSignal 监听信号
 func (s *server) ListenSignal() {
 	// ctrl + c 或者 kill
-	sigs := []os.Signal{syscall.SIGINT, syscall.SIGTERM}
+	sigs := []os.Signal{syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL}
 
 	ch := make(chan os.Signal, 1)
 

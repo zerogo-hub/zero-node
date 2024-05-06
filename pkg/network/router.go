@@ -11,9 +11,11 @@ var (
 )
 
 type router struct {
+	// 路由
 	routes map[uint16]HandlerFunc
 
 	// 自定义处理逻辑
+	// 路由未命中，则调用此函数
 	handlerFunc func(Message) (Message, error)
 }
 

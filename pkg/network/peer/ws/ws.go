@@ -100,8 +100,10 @@ func (s *server) Start() error {
 	}()
 
 	s.config.Logger.Infof("server start, listen at %s, pid: %d", address, os.Getpid())
-	if err := s.config.OnServerStart(); err != nil {
-		return err
+	if s.config.OnServerStart != nil {
+		if err := s.config.OnServerStart(); err != nil {
+			return err
+		}
 	}
 	serveMux.HandleFunc("/", s.wsHandler)
 
@@ -173,7 +175,7 @@ func (s *server) SetMaxConnNum(MaxConnNum int) {
 
 // SetNetwork 可选 "tcp", "tcp4", "tcp6"
 func (s *server) SetNetwork(network string) {
-	s.config.Network = network
+
 }
 
 // SetHost 设置监听地址
@@ -217,9 +219,9 @@ func (s *server) SetRecvBufferSize(recvBufferSize int) {
 	s.config.RecvBufferSize = recvBufferSize
 }
 
-// SetRecvDeadLine 通信超时时间，最终调用 conn.SetReadDeadline
-func (s *server) SetRecvDeadLine(recvDeadLine time.Duration) {
-	s.config.RecvDeadLine = recvDeadLine
+// SetRecvDeadline 通信超时时间，最终调用 conn.SetReadDeadline
+func (s *server) SetRecvDeadline(recvDeadLine time.Duration) {
+	s.config.RecvDeadline = recvDeadLine
 }
 
 // SetRecvQueueSize 在 session 中接收到的消息队列大小，session 接收到消息后并非立即处理，而是丢到一个消息队列中，异步处理
@@ -232,9 +234,9 @@ func (s *server) SetSendBufferSize(recvBufferSize int) {
 	s.config.RecvBufferSize = recvBufferSize
 }
 
-// SetSendDeadLine SendDeadline
-func (s *server) SetSendDeadLine(recvDeadLine time.Duration) {
-	s.config.RecvDeadLine = recvDeadLine
+// SetSendDeadline SendDeadline
+func (s *server) SetSendDeadline(recvDeadLine time.Duration) {
+	s.config.RecvDeadline = recvDeadLine
 }
 
 // SetSendQueueSize 发送的消息队列大小，消息优先发送到 sesion 的消息队列，然后写入到套接字中
@@ -275,6 +277,11 @@ func (s *server) SetCompress(compress zerocompress.Compress) {
 // SetWhetherCrypto 是否需要对消息负载进行加密
 func (s *server) SetWhetherCrypto(whetherCrypto bool) {
 	s.config.WhetherCrypto = whetherCrypto
+}
+
+// SetWhetherChecksum 是否启用校验值功能，默认 false
+func (s *server) SetWhetherChecksum(whetherChecksum bool) {
+	s.config.WhetherChecksum = whetherChecksum
 }
 
 // wsHandler 客户端连接过来时的处理

@@ -24,7 +24,7 @@ type CloseCallbackFunc func(session Session)
 // MessageHander 处理客户端消息
 type MessageHander func(message Message) (Message, error)
 
-// Peer 服务接口，比如表示 tcp 服务，udp 服务，websocket 服务
+// Peer 服务接口，表示一种服务，比如表示 tcp 服务，udp 服务，websocket 服务
 type Peer interface {
 	// Start 开启服务，不会阻塞
 	Start() error
@@ -47,7 +47,7 @@ type Peer interface {
 	PeerOption
 }
 
-// PeerOption peer 的一些配置表设置
+// PeerOption 服务的一些配置
 type PeerOption interface {
 	// WithOption 设置配置
 	WithOption(opts ...Option) Peer
@@ -55,11 +55,13 @@ type PeerOption interface {
 	// SetMaxConnNum 连接数量上限，超过数量则拒绝连接
 	// 负数表示不限制
 	SetMaxConnNum(MaxConnNum int)
-	// SetNetwork 可选 "tcp", "tcp4", "tcp6"
+	// SetNetwork 可选 "tcp", "tcp4", "tcp6"，仅在 tcp peer 下有效
 	SetNetwork(network string)
 	// SetHost 设置监听地址
+	// 默认 127.0.0.1
 	SetHost(host string)
 	// SetPort 设置监听端口
+	// 默认 8001
 	SetPort(port int)
 	// SetLogger 设置日志
 	SetLogger(logger zerologger.Logger)
@@ -67,25 +69,28 @@ type PeerOption interface {
 	// 见 https://github.com/zerogo-hub/zero-helper/blob/main/logger/logger.go
 	SetLoggerLevel(loggerLevel int)
 
-	// SetOnServerStart 服务器启动时触发，套接字监听此时尚未启动
+	// SetOnServerStart 服务器启动时触发，此时尚未启动套接字监听
 	SetOnServerStart(onServerStart func() error)
-	// SetOnServerClose 服务端关闭时触发，此时已关闭客户端连接
+	// SetOnServerClose 服务端关闭时触发，此时已关闭套接字监听，关闭所有客户端连接
 	SetOnServerClose(onServerClose func())
 	// SetCloseTimeout 关闭服务器的等待时间，超过该时间服务器直接关闭
+	// 默认 5 秒
 	SetCloseTimeout(closeTimeout time.Duration)
 
-	// SetRecvBufferSize 在 session 中接收消息 buffer 大小
+	// SetRecvBufferSize 在 session 中接收消息 buffer 大小，默认 8K(8 * 1024)
 	SetRecvBufferSize(recvBufferSize int)
-	// SetRecvDeadLine 通信超时时间，最终调用 conn.SetReadDeadline
-	SetRecvDeadLine(recvDeadLine time.Duration)
+	// SetRecvDeadline 通信超时时间，最终调用 conn.SetReadDeadline 进行设置
+	SetRecvDeadline(recvDeadLine time.Duration)
 	// SetRecvQueueSize 在 session 中接收到的消息队列大小，session 接收到消息后并非立即处理，而是丢到一个消息队列中，异步处理
+	// 默认 128 个，超过此值后会阻塞消息
 	SetRecvQueueSize(recvQueueSize int)
 
-	// SetSendBufferSize 发送消息 buffer 大小
+	// SetSendBufferSize 发送消息 buffer 大小，默认 8K(8 * 1024)
 	SetSendBufferSize(recvBufferSize int)
-	// SetSendDeadLine SendDeadline
-	SetSendDeadLine(recvDeadLine time.Duration)
+	// SetSendDeadline SendDeadline
+	SetSendDeadline(recvDeadLine time.Duration)
 	// SetSendQueueSize 发送的消息队列大小，消息优先发送到 sesion 的消息队列，然后写入到套接字中
+	// 默认 128 个，超过此值后会阻塞消息
 	SetSendQueueSize(recvQueueSize int)
 
 	// SetOnConnected 客户端连接到来时触发，此时客户端已经可以开始收发消息
@@ -98,17 +103,19 @@ type PeerOption interface {
 
 	// SetWhetherCompress 是否需要对消息负载进行压缩
 	SetWhetherCompress(whetherCompress bool)
-	// SetCompressThreshold 压缩的阈值，当消息负载长度超过该值时才会压缩
+	// SetCompressThreshold 压缩的阈值，当消息负载长度不小于该值时才会压缩
 	SetCompressThreshold(compressThreshold int)
-	// SetCompress 压缩与解压器
+	// SetCompress 设置压缩与解压器
 	SetCompress(compress zerocompress.Compress)
-	// SetWhetherCrypto 是否需要对消息负载进行加密
+	// SetWhetherCrypto 是否需要对消息负载进行加解密
 	SetWhetherCrypto(whetherCrypto bool)
+	// SetWhetherChecksum 是否启用校验值功能，默认 false
+	SetWhetherChecksum(whetherChecksum bool)
 }
 
 // Session 表示与客户端的一条连接，也称为会话
 type Session interface {
-	// Run 让当前连接开始工作，比如收发消息，一般用于连接成功之后
+	// Run 让当前连接开始工作，比如收发消息，用于连接成功之后
 	Run()
 
 	// Close 停止接收客户端消息，也不再接收服务端消息。当已接收的服务端消息发送完毕后，断开连接
@@ -117,7 +124,7 @@ type Session interface {
 	// Send 发送消息给客户端
 	Send(message Message) error
 
-	// SendCallback 发送消息给客户端，发送之后响应回调函数
+	// SendCallback 发送消息给客户端，发送成功之后响应回调函数
 	SendCallback(message Message, callback SendCallbackFunc) error
 
 	// ID 获取 sessionID，每一条连接都分配有一个唯一的 id
@@ -138,7 +145,7 @@ type Session interface {
 	// Get 获取自定义参数
 	Get(key string) interface{}
 
-	// Set 设置自定义参数
+	// Set 设置自定义参数，存储于此次会话中
 	Set(key string, value interface{})
 }
 
@@ -172,7 +179,6 @@ type SessionManager interface {
 	Len() int
 
 	// Close 当前所有连接停止接收客户端消息，不再接收服务端消息，当已接收的服务端消息发送完毕后，断开连接
-	// timeout 超时时间，如果超时仍未发送完已接收的服务端消息，也强行关闭连接
 	Close()
 
 	// Send 发送消息给客户端
@@ -210,6 +216,9 @@ type Message interface {
 
 	// Payload 负载
 	Payload() []byte
+
+	// Checksum 校验值
+	Checksum() [16]byte
 
 	// String 打印消息
 	String() string

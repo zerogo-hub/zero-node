@@ -46,8 +46,8 @@ type Config struct {
 	// 默认 8K
 	RecvBufferSize int
 
-	// RecvDeadLine 通信超时时间，最终调用 conn.SetReadDeadline
-	RecvDeadLine time.Duration
+	// RecvDeadline 通信超时时间，最终调用 conn.SetReadDeadline
+	RecvDeadline time.Duration
 
 	// RecvQueueSize 每一个 session 的接收消息队列大小，session 接收到消息后并非立即处理，而是丢到一个消息队列中，异步处理
 	// 默认 128
@@ -57,8 +57,8 @@ type Config struct {
 	// 默认 8K
 	SendBufferSize int
 
-	// SendDeadLine SendDeadline
-	SendDeadLine time.Duration
+	// SendDeadline SendDeadline
+	SendDeadline time.Duration
 
 	// SendQueueSize 每一个 session 的发送消息队列大小，消息优先发送到 sesion 的消息队列，然后写入到套接字中
 	// 默认 128
@@ -72,7 +72,7 @@ type Config struct {
 
 	// --------------------------- 封包与解包 ---------------------------
 
-	// Datapack 封包与解包
+	// Datapack 封包与解包器
 	Datapack Datapack
 
 	// WhetherCompress 是否需要对消息负载进行压缩
@@ -89,22 +89,26 @@ type Config struct {
 
 	// Compress 压缩与解压器
 	Compress zerocompress.Compress
+
+	// WhetherChecksum 是否启用校验值功能
+	WhetherChecksum bool
 }
 
 // DefaultConfig 默认值
 func DefaultConfig() *Config {
 	config := &Config{
-		MaxConnNum:     -1,
-		Network:        "tcp4",
-		Host:           "127.0.0.1",
-		Port:           8001,
-		Logger:         zerologger.NewSampleLogger(),
-		LoggerLevel:    zerologger.DEBUG,
-		RecvBufferSize: 8 * 1024,
-		RecvQueueSize:  128,
-		SendBufferSize: 8 * 1024,
-		SendQueueSize:  128,
-		CloseTimeout:   5 * time.Second,
+		MaxConnNum:      -1,
+		Network:         "tcp4",
+		Host:            "127.0.0.1",
+		Port:            8001,
+		Logger:          zerologger.NewSampleLogger(),
+		LoggerLevel:     zerologger.DEBUG,
+		RecvBufferSize:  8 * 1024,
+		RecvQueueSize:   128,
+		SendBufferSize:  8 * 1024,
+		SendQueueSize:   128,
+		CloseTimeout:    5 * time.Second,
+		WhetherChecksum: false,
 	}
 
 	return config
@@ -191,7 +195,7 @@ func WithRecvBufferSize(recvBufferSize int) Option {
 // WithRecvDeadLine 通信超时时间，最终调用 conn.SetReadDeadline
 func WithRecvDeadLine(recvDeadLine time.Duration) Option {
 	return func(p Peer) {
-		p.SetRecvDeadLine(recvDeadLine)
+		p.SetRecvDeadline(recvDeadLine)
 	}
 }
 
@@ -209,10 +213,10 @@ func WithSendBufferSize(sendBufferSize int) Option {
 	}
 }
 
-// WithSendDeadLine SendDeadline
-func WithSendDeadLine(sendDeadLine time.Duration) Option {
+// WithSendDeadline SendDeadline
+func WithSendDeadline(SendDeadline time.Duration) Option {
 	return func(p Peer) {
-		p.SetSendDeadLine(sendDeadLine)
+		p.SetSendDeadline(SendDeadline)
 	}
 }
 
@@ -269,5 +273,12 @@ func WithCompressThreshold(compressThreshold int) Option {
 func WithCompress(compress zerocompress.Compress) Option {
 	return func(p Peer) {
 		p.SetCompress(compress)
+	}
+}
+
+// WithWhetherChecksum 是否启用检验值功能
+func WithWhetherChecksum(whetherChecksum bool) Option {
+	return func(p Peer) {
+		p.SetWhetherChecksum(whetherChecksum)
 	}
 }

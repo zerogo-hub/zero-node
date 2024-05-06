@@ -146,7 +146,7 @@ func WithClientLoggerLevel(loggerLevel int) ClientOption {
 // WithClientRecvDeadLine 通信超时时间，最终调用 conn.SetReadDeadline
 func WithClientRecvDeadLine(recvDeadLine time.Duration) ClientOption {
 	return func(c *client) {
-		c.Config().RecvDeadLine = recvDeadLine
+		c.Config().RecvDeadline = recvDeadLine
 	}
 }
 
@@ -164,10 +164,10 @@ func WithClientSendBufferSize(sendBufferSize int) ClientOption {
 	}
 }
 
-// WithClientSendDeadLine SendDeadline
-func WithClientSendDeadLine(sendDeadLine time.Duration) ClientOption {
+// WithClientSendDeadline SendDeadline
+func WithClientSendDeadline(SendDeadline time.Duration) ClientOption {
 	return func(c *client) {
-		c.Config().SendDeadLine = sendDeadLine
+		c.Config().SendDeadline = SendDeadline
 	}
 }
 
@@ -224,5 +224,12 @@ func WithClientCompressThreshold(compressThreshold int) ClientOption {
 func WithClientCompress(compress zerocompress.Compress) ClientOption {
 	return func(c *client) {
 		c.Config().Compress = compress
+	}
+}
+
+// WithClientWhetherChecksum 是否使用校验值，默认 false
+func WithClientWhetherChecksum(whetherChecksum bool) ClientOption {
+	return func(c *client) {
+		c.Config().WhetherChecksum = whetherChecksum
 	}
 }

@@ -63,6 +63,9 @@ func main() {
 
 		// 要对消息进行加密
 		zeronetwork.WithWhetherCrypto(true),
+
+		// 启用校验值
+		zeronetwork.WithWhetherChecksum(true),
 	)
 
 	// pprof

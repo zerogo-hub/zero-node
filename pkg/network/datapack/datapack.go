@@ -11,6 +11,7 @@ func DefaultDatapck(config *zeronetwork.Config) zeronetwork.Datapack {
 		config.CompressThreshold,
 		config.Compress,
 		config.WhetherCrypto,
+		config.WhetherChecksum,
 		config.Logger,
 	)
 }

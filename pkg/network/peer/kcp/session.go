@@ -251,9 +251,12 @@ func (s *session) recvLoop() {
 		s.Close()
 	}()
 
-	headerLen := s.config.Datapack.HeadLen()
-
+	headLen := s.config.Datapack.HeadLen()
 	recvBufferSize := s.config.RecvBufferSize
+	if recvBufferSize < headLen {
+		s.config.Logger.Errorf("recvBufferSize: %d less than headLen: %d, session: %d", recvBufferSize, headLen, s.ID())
+		return
+	}
 
 	// buffer 用于读取 socket 中的数据
 	buffer := make([]byte, recvBufferSize)
@@ -263,14 +266,14 @@ func (s *session) recvLoop() {
 	circleBuffer.Reset()
 
 	for {
-		if s.config.RecvDeadLine > 0 {
-			if err := s.conn.SetReadDeadline(time.Now().Add(s.config.RecvDeadLine)); err != nil {
-				s.config.Logger.Error("session: %d, set read deadline error: %s, deadline: %d", s.ID(), err.Error(), s.config.RecvDeadLine)
+		if s.config.RecvDeadline > 0 {
+			if err := s.conn.SetReadDeadline(time.Now().Add(s.config.RecvDeadline)); err != nil {
+				s.config.Logger.Error("session: %d, set read deadline error: %s, deadline: %d", s.ID(), err.Error(), s.config.RecvDeadline)
 				break
 			}
 		}
 
-		size, err := io.ReadAtLeast(s.conn, buffer, headerLen)
+		size, err := io.ReadAtLeast(s.conn, buffer, headLen)
 
 		if s.isStopRecv {
 			break
@@ -309,6 +312,8 @@ func (s *session) recvLoop() {
 			break
 		}
 
+		// TODO 接收数据统计
+
 		// 将消息存入缓冲队列 recvQueue 中，等待 dispatchLoop 处理
 		for _, message := range messages {
 			// 消息设置连接 ID
@@ -319,7 +324,7 @@ func (s *session) recvLoop() {
 	}
 }
 
-// dispatchLoop 执行 recvQueue 中的消息
+// dispatchLoop 执行 recvQueue 中的消息，并将结果推送到 sendQueue 中
 func (s *session) dispatchLoop() {
 	defer func() {
 		if p := recover(); p != nil {
@@ -399,9 +404,9 @@ func (s *session) write(message zeronetwork.Message) error {
 		return err
 	}
 
-	if s.config.SendDeadLine > 0 {
-		if err := s.conn.SetWriteDeadline(time.Now().Add(s.config.SendDeadLine)); err != nil {
-			s.config.Logger.Errorf("session: %d, set write deadline failed: %s, deadline: %d", s.ID, err.Error(), s.config.SendDeadLine)
+	if s.config.SendDeadline > 0 {
+		if err := s.conn.SetWriteDeadline(time.Now().Add(s.config.SendDeadline)); err != nil {
+			s.config.Logger.Errorf("session: %d, set write deadline failed: %s, deadline: %d", s.ID, err.Error(), s.config.SendDeadline)
 			return err
 		}
 	}
@@ -416,6 +421,8 @@ func (s *session) write(message zeronetwork.Message) error {
 		s.config.Logger.Errorf("session: %d, write data is not complete: %d/%d", n, len(p))
 		return ErrWriteNotAll
 	}
+
+	// TODO 发送数据统计
 
 	return nil
 }
