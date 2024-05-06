@@ -24,9 +24,6 @@ type CloseCallbackFunc func(session Session)
 // MessageHander 处理客户端消息
 type MessageHander func(message Message) (Message, error)
 
-// NewMessageFunc 创建一条消息
-type NewMessageFunc func(flag, sn, code uint16, module, action uint8, payload []byte) Message
-
 // Peer 服务接口，比如表示 tcp 服务，udp 服务，websocket 服务
 type Peer interface {
 	// Start 开启服务，不会阻塞
