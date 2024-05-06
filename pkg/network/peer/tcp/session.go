@@ -278,7 +278,7 @@ func (s *session) recvLoop() {
 
 		if err != nil {
 			// 远端关闭
-			if err == io.EOF {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				if s.config.Logger.IsDebugAble() {
 					s.config.Logger.Debugf("session: %d, closed by remote, io.EOF", s.ID())
 				}
