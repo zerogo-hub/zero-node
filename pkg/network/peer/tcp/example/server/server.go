@@ -28,7 +28,8 @@ const (
 )
 
 const (
-	secretKey = "PUmjGmE9xccKlDWV"
+	secretKey   = "PUmjGmE9xccKlDWV"
+	checksumKey = "abcdef"
 )
 
 type server struct {
@@ -102,10 +103,14 @@ func (s *server) onServerClose() {
 func (s *server) onConnected(session zeronetwork.Session) {
 	s.p.Logger().Infof("session: %d connected, total: %d", session.ID(), s.p.SessionManager().Len())
 
-	// 通过 dh 协议双方交换密钥用于后续加密
-	// 这里直接使用 secretKey
+	// 连接成功后，通过 dh 协议双方交换秘钥，这里直接使用固定秘钥
+
+	// 消息提加密
 	crypto, _ := zerorc4.New(secretKey)
 	session.SetCrypto(crypto)
+
+	// 校验值秘钥
+	session.SetChecksumKey([]byte(checksumKey))
 }
 
 func (s *server) onConnClose(session zeronetwork.Session) {

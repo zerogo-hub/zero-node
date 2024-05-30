@@ -113,6 +113,11 @@ func (c *client) SetCrypto(crypto zeronetwork.Crypto) {
 	c.ss.SetCrypto(crypto)
 }
 
+// SetChecksumKey 设置校验秘钥
+func (c *client) SetChecksumKey(checksumKey []byte) {
+	c.ss.SetChecksumKey(checksumKey)
+}
+
 // Config 配置
 func (c *client) Config() *zeronetwork.Config {
 	return c.ss.Config()

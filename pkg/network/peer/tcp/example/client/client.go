@@ -30,7 +30,8 @@ const (
 )
 
 const (
-	secretKey = "PUmjGmE9xccKlDWV"
+	secretKey   = "PUmjGmE9xccKlDWV"
+	checksumKey = "abcdef"
 )
 
 type client struct {
@@ -83,6 +84,7 @@ func main() {
 	// 设置加密与解密的工具
 	crypto, _ := zerorc4.New(secretKey)
 	cc.SetCrypto(crypto)
+	cc.SetChecksumKey([]byte(checksumKey))
 
 	c.cc = cc
 	c.start()

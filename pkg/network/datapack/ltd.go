@@ -202,7 +202,7 @@ func (l *ltd) HeadLen() int {
 }
 
 // Pack 封包
-func (l *ltd) Pack(message zeronetwork.Message, crypto zeronetwork.Crypto) ([]byte, error) {
+func (l *ltd) Pack(message zeronetwork.Message, crypto zeronetwork.Crypto, checksumKey []byte) ([]byte, error) {
 	var err error
 
 	// 处理负载：压缩，加密
@@ -285,7 +285,7 @@ func (l *ltd) Pack(message zeronetwork.Message, crypto zeronetwork.Crypto) ([]by
 
 	// 计算校验值并填充
 	if l.whetherChecksum {
-		calcChecksum := zerocrypto.Md5ByteToByte(allBytes)
+		calcChecksum := zerocrypto.HmacMd5ByteToByte(allBytes, checksumKey)
 		// i = [10,26)
 		for i, v := range calcChecksum {
 			allBytes[10+i] = v
@@ -296,7 +296,7 @@ func (l *ltd) Pack(message zeronetwork.Message, crypto zeronetwork.Crypto) ([]by
 }
 
 // Unpack 解包
-func (l *ltd) Unpack(buffer *zeroringbytes.RingBytes, crypto zeronetwork.Crypto) ([]zeronetwork.Message, error) {
+func (l *ltd) Unpack(buffer *zeroringbytes.RingBytes, crypto zeronetwork.Crypto, checksumKey []byte) ([]zeronetwork.Message, error) {
 	messages := []zeronetwork.Message{}
 
 	for {
@@ -364,7 +364,7 @@ func (l *ltd) Unpack(buffer *zeroringbytes.RingBytes, crypto zeronetwork.Crypto)
 			copy(checksum[:], p)
 			index += 16
 
-			if !l.verifyChecksum(checksum, allBytes) {
+			if !l.verifyChecksum(checksum, allBytes, checksumKey) {
 				return nil, ErrVerifyChecksum
 			}
 		}
@@ -403,12 +403,12 @@ func (l *ltd) Unpack(buffer *zeroringbytes.RingBytes, crypto zeronetwork.Crypto)
 	return messages, nil
 }
 
-func (l *ltd) verifyChecksum(checksum [16]byte, allBytes []byte) bool {
+func (l *ltd) verifyChecksum(checksum [16]byte, allBytes, checksumKey []byte) bool {
 	// 将填写检验值部分置 0
 	for i := 10; i < 26; i++ {
 		allBytes[i] = 0
 	}
-	calcChecksum := zerocrypto.Md5ByteToByte(allBytes)
+	calcChecksum := zerocrypto.HmacMd5ByteToByte(allBytes, checksumKey)
 
 	if len(calcChecksum) != len(checksum) {
 		return false

@@ -139,6 +139,9 @@ type Session interface {
 	// SetCrypto 设置加密解密的工具
 	SetCrypto(crypto Crypto)
 
+	// SetChecksumKey 设置校验秘钥
+	SetChecksumKey(checksumKey []byte)
+
 	// Config 配置
 	Config() *Config
 
@@ -239,10 +242,10 @@ type Datapack interface {
 	HeadLen() int
 
 	// Pack 封包
-	Pack(message Message, crypto Crypto) ([]byte, error)
+	Pack(message Message, crypto Crypto, checksumKey []byte) ([]byte, error)
 
 	// Unpack 解包
-	Unpack(buffer *zeroringbytes.RingBytes, crypto Crypto) ([]Message, error)
+	Unpack(buffer *zeroringbytes.RingBytes, crypto Crypto, checksumKey []byte) ([]Message, error)
 }
 
 // HandlerFunc 路由消息处理函数

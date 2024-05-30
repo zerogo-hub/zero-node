@@ -70,6 +70,9 @@ type session struct {
 	// crypto 消息负载的加密与解密
 	crypto zeronetwork.Crypto
 
+	// checksumKey 秘钥，用于校验消息的完整性
+	checksumKey []byte
+
 	// handler 用于处理接收到的消息
 	handler zeronetwork.HandlerFunc
 
@@ -221,6 +224,11 @@ func (s *session) SetCrypto(crypto zeronetwork.Crypto) {
 	s.crypto = crypto
 }
 
+// SetChecksumKey 设置校验秘钥
+func (s *session) SetChecksumKey(checksumKey []byte) {
+	s.checksumKey = checksumKey
+}
+
 // Config 配置
 func (s *session) Config() *zeronetwork.Config {
 	return s.config
@@ -282,7 +290,7 @@ func (s *session) recvLoop() {
 			break
 		}
 
-		messages, err := s.config.Datapack.Unpack(circleBuffer, s.crypto)
+		messages, err := s.config.Datapack.Unpack(circleBuffer, s.crypto, s.checksumKey)
 		if err != nil {
 			s.config.Logger.Errorf("session: %d unpack failed: %s", s.ID(), err.Error())
 			break
@@ -373,7 +381,7 @@ func (s *session) write(message zeronetwork.Message) error {
 	s.sendWait.Add(1)
 	defer s.sendWait.Done()
 
-	p, err := s.config.Datapack.Pack(message, s.crypto)
+	p, err := s.config.Datapack.Pack(message, s.crypto, s.checksumKey)
 	if err != nil {
 		s.config.Logger.Errorf("session: %d, pack message failed; %s, message: %s", s.ID, err.Error(), message.String())
 		return err
