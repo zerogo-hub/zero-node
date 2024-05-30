@@ -13,13 +13,13 @@ type rc4 struct {
 }
 
 // New 加密和解密要分别创建实例
-func New(key string) (zeronetwork.Crypto, error) {
-	cipherEn, err := stdRC4.NewCipher([]byte(key))
+func New(key []byte) (zeronetwork.Crypto, error) {
+	cipherEn, err := stdRC4.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
 
-	cipherDe, err := stdRC4.NewCipher([]byte(key))
+	cipherDe, err := stdRC4.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}

@@ -1,7 +1,9 @@
 package kcp
 
 import (
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -11,6 +13,8 @@ import (
 
 	zeroringbytes "github.com/zerogo-hub/zero-helper/buffer/ringbytes"
 	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
+	zeronetworkkey "github.com/zerogo-hub/zero-node/pkg/network/key"
+	zerorc4 "github.com/zerogo-hub/zero-node/pkg/security/rc4"
 )
 
 var (
@@ -353,7 +357,14 @@ func (s *session) dispatchLoop() {
 				break
 			}
 
-			responseMessage, err := s.handler(message)
+			var responseMessage zeronetwork.Message
+			var err error
+			if message.Flag()&zeronetwork.FlagZero == 0 {
+				responseMessage, err = s.handler(message)
+			} else {
+				responseMessage, err = s.handleZero(message)
+			}
+
 			if err != nil {
 				if s.config.Logger.IsDebugAble() {
 					s.config.Logger.Debugf("session: %d, dispatch message failed: %s, message: %s", message.SessionID(), err.Error(), message.String())
@@ -441,4 +452,69 @@ func (s *session) write(message zeronetwork.Message) error {
 	// TODO 发送数据统计
 
 	return nil
+}
+
+// handleZero 处理一些特殊协议
+func (s *session) handleZero(message zeronetwork.Message) (zeronetwork.Message, error) {
+	if message.Flag()&zeronetwork.FlagZero == 0 {
+		return nil, nil
+	}
+
+	action := message.ActionID()
+	if action == zeronetwork.FlagZeroExchangeKeyRequest {
+		return s.handleExchangeKeyRequest(message)
+	} else if action == zeronetwork.FlagZeroExchangeKeyResponse {
+		return s.handleExchangeKeyResponse(message)
+	}
+
+	return nil, fmt.Errorf("action not supported: %d", action)
+}
+
+func (s *session) handleExchangeKeyRequest(message zeronetwork.Message) (zeronetwork.Message, error) {
+	key, message, err := zeronetworkkey.ExchangeKeyResponse(message.Payload())
+	if err != nil {
+		return nil, err
+	}
+
+	// 目前用于 rc4 和 checksum 都是同一个秘钥
+	crypto, _ := zerorc4.New(key)
+	s.SetCrypto(crypto)
+	s.SetChecksumKey(key)
+
+	if s.config.Logger.IsDebugAble() {
+		s.config.Logger.Debugf("session: %d, key: %s", s.ID(), hex.EncodeToString(key))
+	}
+
+	return message, nil
+}
+
+func (s *session) handleExchangeKeyResponse(message zeronetwork.Message) (zeronetwork.Message, error) {
+	privateKey := s.Get("ecdhPrivateKey").([]byte)
+	randomValue := s.Get("ecdhRandomValue").([]byte)
+
+	if len(privateKey) == 0 {
+		return nil, errors.New("private key is empty")
+	}
+	if len(randomValue) == 0 {
+		return nil, errors.New("random value is empty")
+	}
+
+	key, err := zeronetworkkey.ExchangeKeyParseResponse(message.Payload(), privateKey, randomValue)
+	if err != nil {
+		return nil, err
+	}
+
+	// 目前用于 rc4 和 checksum 都是同一个秘钥
+	crypto, _ := zerorc4.New(key)
+	s.SetCrypto(crypto)
+	s.SetChecksumKey(key)
+
+	s.Set("ecdhPrivateKey", nil)
+	s.Set("ecdhRandomValue", nil)
+
+	if s.config.Logger.IsDebugAble() {
+		s.config.Logger.Debugf("session: %d, key: %s", s.ID(), hex.EncodeToString(key))
+	}
+
+	return nil, nil
 }

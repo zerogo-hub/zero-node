@@ -16,7 +16,6 @@ import (
 	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
 	zerodatapack "github.com/zerogo-hub/zero-node/pkg/network/datapack"
 	zerows "github.com/zerogo-hub/zero-node/pkg/network/peer/ws"
-	zerorc4 "github.com/zerogo-hub/zero-node/pkg/security/rc4"
 )
 
 const (
@@ -28,10 +27,6 @@ const (
 
 	// ActionHelloSayResp hello 模块 服务端响应
 	ActionHelloSayResp = 2
-)
-
-const (
-	secretKey = "PUmjGmE9xccKlDWV"
 )
 
 type client struct {
@@ -82,10 +77,6 @@ func main() {
 		cc.Logger().Errorf("connect failed, err: %s", err.Error())
 		return
 	}
-
-	// 设置加密与解密的工具
-	crypto, _ := zerorc4.New(secretKey)
-	cc.SetCrypto(crypto)
 
 	c.cc = cc
 	c.start()

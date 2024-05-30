@@ -266,7 +266,7 @@ func (l *ltd) Pack(message zeronetwork.Message, crypto zeronetwork.Crypto, check
 	allBytes := buffer.Bytes()
 
 	// 计算校验值并填充
-	if l.whetherChecksum {
+	if l.whetherChecksum && (flag&zeronetwork.FlagZero == 0) {
 		calcChecksum := zerocrypto.HmacMd5ByteToByte(allBytes, checksumKey)
 		checksumStartIndex := l.HeadLen() - ChecksumLength
 		for i, v := range calcChecksum {
@@ -318,7 +318,7 @@ func (l *ltd) packBody(message zeronetwork.Message, crypto zeronetwork.Crypto) (
 	}
 
 	// 加密
-	if l.whetherCrypto && crypto != nil {
+	if l.whetherCrypto && crypto != nil && (flag&zeronetwork.FlagZero == 0) {
 		body, err = crypto.Encrypt(body)
 		if err != nil {
 			l.logger.Errorf("encrypt failed, message: %s, err: %s", message.String(), err.Error())
@@ -383,14 +383,16 @@ func (l *ltd) Unpack(buffer *zeroringbytes.RingBytes, crypto zeronetwork.Crypto,
 				return nil, ErrNoChecksumFlag
 			}
 
-			checksum := [ChecksumLength]byte{}
-			p = allBytes[index : index+ChecksumLength]
-			copy(checksum[:], p)
-			index += ChecksumLength
-
-			if !l.verifyChecksum(checksum, allBytes, checksumKey) {
-				return nil, ErrVerifyChecksum
+			if flag&zeronetwork.FlagZero == 0 {
+				checksum := [ChecksumLength]byte{}
+				p = allBytes[index : index+ChecksumLength]
+				copy(checksum[:], p)
+				if !l.verifyChecksum(checksum, allBytes, checksumKey) {
+					return nil, ErrVerifyChecksum
+				}
 			}
+
+			index += ChecksumLength
 		}
 
 		// ---------------------- 消息体(解密、解压) ----------------------
@@ -398,7 +400,7 @@ func (l *ltd) Unpack(buffer *zeroringbytes.RingBytes, crypto zeronetwork.Crypto,
 		bodyBytes := allBytes[index:]
 
 		// 解密
-		if flag&zeronetwork.FlagEncrypt != 0 && crypto != nil {
+		if flag&zeronetwork.FlagEncrypt != 0 && crypto != nil && (flag&zeronetwork.FlagZero == 0) {
 			bodyBytes, err = crypto.Decrypt(bodyBytes)
 			if err != nil {
 				l.logger.Errorf("decrypt failed, sn: %d, err: %s", sn, err.Error())

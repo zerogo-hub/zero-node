@@ -13,7 +13,6 @@ import (
 	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
 	zerodatapack "github.com/zerogo-hub/zero-node/pkg/network/datapack"
 	zerotcp "github.com/zerogo-hub/zero-node/pkg/network/peer/tcp"
-	zerorc4 "github.com/zerogo-hub/zero-node/pkg/security/rc4"
 )
 
 const (
@@ -25,11 +24,6 @@ const (
 
 	// ActionHelloSayResp hello 模块 服务端响应
 	ActionHelloSayResp = 2
-)
-
-const (
-	secretKey   = "PUmjGmE9xccKlDWV"
-	checksumKey = "abcdef"
 )
 
 type server struct {
@@ -102,15 +96,6 @@ func (s *server) onServerClose() {
 
 func (s *server) onConnected(session zeronetwork.Session) {
 	s.p.Logger().Infof("session: %d connected, total: %d", session.ID(), s.p.SessionManager().Len())
-
-	// 连接成功后，通过 dh 协议双方交换秘钥，这里直接使用固定秘钥
-
-	// 消息提加密
-	crypto, _ := zerorc4.New(secretKey)
-	session.SetCrypto(crypto)
-
-	// 校验值秘钥
-	session.SetChecksumKey([]byte(checksumKey))
 }
 
 func (s *server) onConnClose(session zeronetwork.Session) {

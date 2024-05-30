@@ -14,8 +14,8 @@ import (
 
 	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
 	zerodatapack "github.com/zerogo-hub/zero-node/pkg/network/datapack"
+	zeronetworkkey "github.com/zerogo-hub/zero-node/pkg/network/key"
 	zerotcp "github.com/zerogo-hub/zero-node/pkg/network/peer/tcp"
-	zerorc4 "github.com/zerogo-hub/zero-node/pkg/security/rc4"
 )
 
 const (
@@ -27,11 +27,6 @@ const (
 
 	// ActionHelloSayResp hello 模块 服务端响应
 	ActionHelloSayResp = 2
-)
-
-const (
-	secretKey   = "PUmjGmE9xccKlDWV"
-	checksumKey = "abcdef"
 )
 
 type client struct {
@@ -75,16 +70,15 @@ func main() {
 
 		// 启用校验值
 		zerotcp.WithClientWhetherChecksum(true),
+
+		// 连接成功时触发，用于秘钥协商
+		zerotcp.WithClientOnConnected(c.onConnected),
 	)
+
 	if err := cc.Connect("tcp4", "127.0.0.1", 8001); err != nil {
 		cc.Logger().Errorf("connect failed, err: %s", err.Error())
 		return
 	}
-
-	// 设置加密与解密的工具
-	crypto, _ := zerorc4.New(secretKey)
-	cc.SetCrypto(crypto)
-	cc.SetChecksumKey([]byte(checksumKey))
 
 	c.cc = cc
 	c.start()
@@ -156,4 +150,15 @@ func (c *client) send(module, action uint8, payload []byte) error {
 	code := uint16(0)
 	message := zerodatapack.NewLTDMessage(flag, c.sn, code, module, action, payload)
 	return c.cc.Send(message)
+}
+
+func (c *client) onConnected(session zeronetwork.Session) {
+	// 秘钥协商
+
+	privateKey, randomValue, message := zeronetworkkey.ExchangeKeyRequest()
+
+	c.cc.Set("ecdhPrivateKey", privateKey)
+	c.cc.Set("ecdhRandomValue", randomValue)
+
+	c.cc.Send(message)
 }
