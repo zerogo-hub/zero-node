@@ -26,6 +26,9 @@ var (
 	// ErrVerifyChecksum 校验失败
 	ErrVerifyChecksum = errors.New("verify checksum failed")
 
+	// ErrNoChecksumFlag 无校验标记
+	ErrNoChecksumFlag = errors.New("no checksum flag")
+
 	// ErrDecryptPayload 解密负载失败
 	ErrDecryptPayload = errors.New("decrypt payload failed")
 
@@ -230,6 +233,11 @@ func (l *ltd) Pack(message zeronetwork.Message, crypto zeronetwork.Crypto) ([]by
 		}
 	}
 
+	// 校验值
+	if l.whetherChecksum {
+		flag |= zeronetwork.FlagChecksum
+	}
+
 	buffer := bufferPool.Get().(*bytes.Buffer)
 	defer bufferPool.Put(buffer)
 	buffer.Reset()
@@ -347,6 +355,10 @@ func (l *ltd) Unpack(buffer *zeroringbytes.RingBytes, crypto zeronetwork.Crypto)
 
 		// checksum 校验值
 		if l.whetherChecksum {
+			if flag&zeronetwork.FlagChecksum == 0 {
+				return nil, ErrNoChecksumFlag
+			}
+
 			checksum := [16]byte{}
 			p = allBytes[index : index+16]
 			copy(checksum[:], p)
