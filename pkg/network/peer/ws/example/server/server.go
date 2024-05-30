@@ -41,7 +41,7 @@ type server struct {
 
 func main() {
 	s := &server{
-		codec: zeroprotobuf.NewProtobufCodec(),
+		codec: zeroprotobuf.New(),
 	}
 
 	s.p = zerows.NewServer(

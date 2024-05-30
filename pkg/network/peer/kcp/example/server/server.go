@@ -40,7 +40,7 @@ type server struct {
 
 func main() {
 	s := &server{
-		codec: zeroprotobuf.NewProtobufCodec(),
+		codec: zeroprotobuf.New(),
 	}
 
 	s.p = zerokcp.NewServer().WithOption(

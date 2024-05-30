@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	zerocircle "github.com/zerogo-hub/zero-helper/buffer/circle"
+	zeroringbytes "github.com/zerogo-hub/zero-helper/buffer/ringbytes"
 	zeronetwork "github.com/zerogo-hub/zero-node/pkg/network"
 )
 
@@ -259,7 +259,7 @@ func (s *session) recvLoop() {
 	buffer := make([]byte, recvBufferSize)
 
 	// circleBuffer 用于存储从 socket 读取的数据
-	circleBuffer := zerocircle.New(recvBufferSize * 2)
+	circleBuffer := zeroringbytes.New(recvBufferSize * 2)
 	circleBuffer.Reset()
 
 	for {

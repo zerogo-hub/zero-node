@@ -4,7 +4,7 @@ import (
 	"net"
 	"time"
 
-	zerocircle "github.com/zerogo-hub/zero-helper/buffer/circle"
+	zeroringbytes "github.com/zerogo-hub/zero-helper/buffer/ringbytes"
 	zerocompress "github.com/zerogo-hub/zero-helper/compress"
 	zerologger "github.com/zerogo-hub/zero-helper/logger"
 )
@@ -242,7 +242,7 @@ type Datapack interface {
 	Pack(message Message, crypto Crypto) ([]byte, error)
 
 	// Unpack 解包
-	Unpack(buffer *zerocircle.Circle, crypto Crypto) ([]Message, error)
+	Unpack(buffer *zeroringbytes.RingBytes, crypto Crypto) ([]Message, error)
 }
 
 // HandlerFunc 路由消息处理函数

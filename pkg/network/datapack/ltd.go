@@ -8,7 +8,7 @@ import (
 	"sync"
 	"unsafe"
 
-	zerocircle "github.com/zerogo-hub/zero-helper/buffer/circle"
+	zeroringbytes "github.com/zerogo-hub/zero-helper/buffer/ringbytes"
 	zerobytes "github.com/zerogo-hub/zero-helper/bytes"
 	zerocompress "github.com/zerogo-hub/zero-helper/compress"
 	zerocrypto "github.com/zerogo-hub/zero-helper/crypto"
@@ -288,7 +288,7 @@ func (l *ltd) Pack(message zeronetwork.Message, crypto zeronetwork.Crypto) ([]by
 }
 
 // Unpack 解包
-func (l *ltd) Unpack(buffer *zerocircle.Circle, crypto zeronetwork.Crypto) ([]zeronetwork.Message, error) {
+func (l *ltd) Unpack(buffer *zeroringbytes.RingBytes, crypto zeronetwork.Crypto) ([]zeronetwork.Message, error) {
 	messages := []zeronetwork.Message{}
 
 	for {
@@ -314,7 +314,7 @@ func (l *ltd) Unpack(buffer *zerocircle.Circle, crypto zeronetwork.Crypto) ([]ze
 		}
 
 		// 取出所有内容
-		allBytes, err := buffer.Get(l.headLen + payloadLen)
+		allBytes, err := buffer.Read(l.headLen + payloadLen)
 		if err != nil {
 			return nil, ErrGetAllBytes
 		}

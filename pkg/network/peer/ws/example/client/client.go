@@ -52,7 +52,7 @@ type client struct {
 func main() {
 	c := &client{
 		router:  zeronetwork.NewRouter(),
-		codec:   zeroprotobuf.NewProtobufCodec(),
+		codec:   zeroprotobuf.New(),
 		closeCh: make(chan bool),
 	}
 
