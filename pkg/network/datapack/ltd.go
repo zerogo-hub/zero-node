@@ -36,30 +36,40 @@ var (
 	ErrDecompressPayload = errors.New("decompress payload failed")
 )
 
+const (
+	ChecksumLength = 16
+)
+
 // ltdMessageHead 消息头
 type ltdMessageHead struct {
-	// Len 负载长度，即 Payload 中的长度
+	// Len 包体长度，即 ltdMessageBody 的长度
 	Len uint16
 	// Flag 标记，具体见 modules/network/flag.go
 	Flag uint16
 	// SN 自增编号，由客户端发出，服务端原样返回。服务端主动发出的消息中 SN 值为 0
 	SN uint16
+	// Checksum 校验值
+	Checksum [ChecksumLength]byte
+}
+
+// ltdMessageBody 消息体
+type ltdMessageBody struct {
 	// Code 错误码，如果存在错误，则会在 payload 中存储具体的错误信息
 	Code uint16
 	// Module 功能模块，用来表示一个功能大类，比如商店、副本
 	Module uint8
 	// Action 功能细分，用来表示一个功能里面的具体功能，比如进入副本，退出副本
 	Action uint8
-	// Checksum 校验值
-	Checksum [16]byte
+	// Payload 具体内容
+	Payload []byte
 }
 
-// HeadLen 消息头长度，26 字节
+// HeadLen 消息头长度，6 字节或者 22 字节
 func ltdHeadLen(whetherChecksum bool) int {
 	length := int(unsafe.Sizeof(ltdMessageHead{}))
 
 	if !whetherChecksum {
-		length -= 16
+		length -= ChecksumLength
 	}
 
 	return length
@@ -67,10 +77,11 @@ func ltdHeadLen(whetherChecksum bool) int {
 
 // ltdMessage 消息
 type ltdMessage struct {
-	// Head 消息头
+	// head 消息头
 	head *ltdMessageHead
-	// Payload 具体内容
-	payload []byte
+
+	// body 消息体
+	body *ltdMessageBody
 
 	// sessionID 会话 id
 	sessionID zeronetwork.SessionID
@@ -78,17 +89,18 @@ type ltdMessage struct {
 
 // NewLTDMessage 创建一个消息
 func NewLTDMessage(flag, sn, code uint16, module, action uint8, payload []byte) zeronetwork.Message {
-	return &ltdMessage{
-		head: &ltdMessageHead{
-			Len:    uint16(len(payload)),
-			Flag:   flag,
-			SN:     sn,
-			Code:   code,
-			Module: module,
-			Action: action,
-		},
-		payload: payload,
-	}
+	m := messagePool.Get().(*ltdMessage)
+
+	m.head.Len = uint16(4 + len(payload))
+	m.head.Flag = flag
+	m.head.SN = sn
+
+	m.body.Code = code
+	m.body.Module = module
+	m.body.Action = action
+	m.body.Payload = payload
+
+	return m
 }
 
 // SessionID 会话 ID，每一个连接都有一个唯一的会话 ID
@@ -103,17 +115,17 @@ func (m *ltdMessage) SetSessionID(sessionID zeronetwork.SessionID) {
 
 // Code 错误码
 func (m *ltdMessage) Code() uint16 {
-	return m.head.Code
+	return m.body.Code
 }
 
 // ModuleID 功能模块，用来表示一个功能大类，比如商店、副本
 func (m *ltdMessage) ModuleID() uint8 {
-	return m.head.Module
+	return m.body.Module
 }
 
 // ActionID 功能细分，用来表示一个功能里面的具体功能，比如进入副本，退出副本
 func (m *ltdMessage) ActionID() uint8 {
-	return m.head.Action
+	return m.body.Action
 }
 
 // Flag 标记
@@ -128,21 +140,27 @@ func (m *ltdMessage) SN() uint16 {
 
 // Payload 负载
 func (m *ltdMessage) Payload() []byte {
-	return m.payload
+	return m.body.Payload
 }
 
 // Checksum 校验值
-func (m *ltdMessage) Checksum() [16]byte {
+func (m *ltdMessage) Checksum() [ChecksumLength]byte {
 	return m.head.Checksum
 }
 
 // String 打印信息
 func (m *ltdMessage) String() string {
-	return fmt.Sprintf("sn: %d, module: %d, action: %d", m.head.SN, m.head.Module, m.head.Action)
+	return fmt.Sprintf("sn: %d, module: %d, action: %d", m.head.SN, m.body.Module, m.body.Action)
+}
+
+// Release 释放资源
+
+func (m *ltdMessage) Release() {
+	messagePool.Put(m)
 }
 
 // ltd 按 Length-Type-Data 格式进行封包与解包
-// 封装出的消息结构见 ltd-message.go/ltdMessage
+// 封装出的消息结构见 ltdMessage
 type ltd struct {
 	// headLen 消息头长度
 	headLen int
@@ -169,7 +187,7 @@ type ltd struct {
 	logger zerologger.Logger
 
 	// emptyChecksum 空检验值，用于计算
-	emptyChecksum [16]byte
+	emptyChecksum [ChecksumLength]byte
 }
 
 // NewLTD 创建一个封包解包工具
@@ -192,7 +210,7 @@ func NewLTD(
 		// 默认使用大端，zerobytes.ToUint16 也是大端模式
 		order:         binary.BigEndian,
 		logger:        logger,
-		emptyChecksum: [16]byte{},
+		emptyChecksum: [ChecksumLength]byte{},
 	}
 }
 
@@ -203,34 +221,9 @@ func (l *ltd) HeadLen() int {
 
 // Pack 封包
 func (l *ltd) Pack(message zeronetwork.Message, crypto zeronetwork.Crypto, checksumKey []byte) ([]byte, error) {
-	var err error
-
-	// 处理负载：压缩，加密
-	flag := message.Flag()
-	payload := message.Payload()
-
-	if len(payload) > 0 {
-		// 压缩
-		if l.whetherCompress && l.compress != nil && len(payload) >= l.compressThreshold {
-			payload, err = l.compress.Compress(payload)
-			if err != nil {
-				l.logger.Errorf("compress failed, message: %s, err: %s", message.String(), err.Error())
-				return nil, err
-			}
-
-			flag |= zeronetwork.FlagCompress
-		}
-
-		// 加密
-		if l.whetherCrypto && crypto != nil {
-			payload, err = crypto.Encrypt(payload)
-			if err != nil {
-				l.logger.Errorf("encrypt failed, message: %s, err: %s", message.String(), err.Error())
-				return nil, err
-			}
-
-			flag |= zeronetwork.FlagEncrypt
-		}
+	body, flag, err := l.packBody(message, crypto)
+	if err != nil {
+		return nil, err
 	}
 
 	// 校验值
@@ -242,10 +235,10 @@ func (l *ltd) Pack(message zeronetwork.Message, crypto zeronetwork.Crypto, check
 	defer bufferPool.Put(buffer)
 	buffer.Reset()
 
-	payloadLen := uint16(len(payload))
+	bodyLen := uint16(len(body))
 
-	// 负载长度
-	if err := binary.Write(buffer, l.order, payloadLen); err != nil {
+	// 消息体长度
+	if err := binary.Write(buffer, l.order, bodyLen); err != nil {
 		return nil, err
 	}
 	// flag 标记
@@ -256,18 +249,7 @@ func (l *ltd) Pack(message zeronetwork.Message, crypto zeronetwork.Crypto, check
 	if err := binary.Write(buffer, l.order, message.SN()); err != nil {
 		return nil, err
 	}
-	// 错误码
-	if err := binary.Write(buffer, l.order, message.Code()); err != nil {
-		return nil, err
-	}
-	// Module
-	if err := binary.Write(buffer, l.order, message.ModuleID()); err != nil {
-		return nil, err
-	}
-	// Action
-	if err := binary.Write(buffer, l.order, message.ActionID()); err != nil {
-		return nil, err
-	}
+
 	// 校验值
 	if l.whetherChecksum {
 		if err := binary.Write(buffer, l.order, l.emptyChecksum); err != nil {
@@ -275,8 +257,8 @@ func (l *ltd) Pack(message zeronetwork.Message, crypto zeronetwork.Crypto, check
 		}
 	}
 	// 负载
-	if len(payload) > 0 {
-		if err := binary.Write(buffer, l.order, payload); err != nil {
+	if len(body) > 0 {
+		if err := binary.Write(buffer, l.order, body); err != nil {
 			return nil, err
 		}
 	}
@@ -286,13 +268,67 @@ func (l *ltd) Pack(message zeronetwork.Message, crypto zeronetwork.Crypto, check
 	// 计算校验值并填充
 	if l.whetherChecksum {
 		calcChecksum := zerocrypto.HmacMd5ByteToByte(allBytes, checksumKey)
-		// i = [10,26)
+		checksumStartIndex := l.HeadLen() - ChecksumLength
 		for i, v := range calcChecksum {
-			allBytes[10+i] = v
+			allBytes[checksumStartIndex+i] = v
 		}
 	}
 
 	return allBytes, nil
+}
+
+func (l *ltd) packBody(message zeronetwork.Message, crypto zeronetwork.Crypto) ([]byte, uint16, error) {
+	buffer := bufferPool.Get().(*bytes.Buffer)
+	defer bufferPool.Put(buffer)
+	buffer.Reset()
+
+	// 错误码
+	if err := binary.Write(buffer, l.order, message.Code()); err != nil {
+		return nil, 0, err
+	}
+	// Module
+	if err := binary.Write(buffer, l.order, message.ModuleID()); err != nil {
+		return nil, 0, err
+	}
+	// Action
+	if err := binary.Write(buffer, l.order, message.ActionID()); err != nil {
+		return nil, 0, err
+	}
+	// 负载
+	payload := message.Payload()
+	if len(payload) > 0 {
+		if err := binary.Write(buffer, l.order, payload); err != nil {
+			return nil, 0, err
+		}
+	}
+
+	var err error
+	body := buffer.Bytes()
+	flag := message.Flag()
+
+	// 压缩
+	if l.whetherCompress && l.compress != nil && len(body) >= l.compressThreshold {
+		body, err = l.compress.Compress(body)
+		if err != nil {
+			l.logger.Errorf("compress failed, message: %s, err: %s", message.String(), err.Error())
+			return nil, 0, err
+		}
+
+		flag |= zeronetwork.FlagCompress
+	}
+
+	// 加密
+	if l.whetherCrypto && crypto != nil {
+		body, err = crypto.Encrypt(body)
+		if err != nil {
+			l.logger.Errorf("encrypt failed, message: %s, err: %s", message.String(), err.Error())
+			return nil, 0, err
+		}
+
+		flag |= zeronetwork.FlagEncrypt
+	}
+
+	return body, flag, nil
 }
 
 // Unpack 解包
@@ -307,27 +343,28 @@ func (l *ltd) Unpack(buffer *zeroringbytes.RingBytes, crypto zeronetwork.Crypto,
 			break
 		}
 
-		// 取出负载长度
+		// 取出消息体长度
 		p, err := buffer.Peek(2)
 		if err != nil {
 			return nil, ErrGetPayloadLen
 		}
-		payloadLen := int(zerobytes.ToUint16(p))
+		bodyLen := int(zerobytes.ToUint16(p))
+		index := 2
 
 		// 判断是否满足至少一个消息
-		if bufferLen < l.headLen+payloadLen {
+		if bufferLen < l.headLen+bodyLen {
 			// 当前内容长度 < 消息头长度 + 负载长度
 			// 目前这不是一个完整的消息
 			break
 		}
 
 		// 取出所有内容
-		allBytes, err := buffer.Read(l.headLen + payloadLen)
+		allBytes, err := buffer.Read(l.headLen + bodyLen)
 		if err != nil {
 			return nil, ErrGetAllBytes
 		}
 
-		index := 2
+		// ---------------------- 消息头 ----------------------
 
 		// flag 标记
 		p = allBytes[index : index+2]
@@ -339,60 +376,65 @@ func (l *ltd) Unpack(buffer *zeroringbytes.RingBytes, crypto zeronetwork.Crypto,
 		sn := zerobytes.ToUint16(p)
 		index += 2
 
-		// code 错误码
-		code := uint16(0)
-		index += 2
-
-		// module 功能模块
-		p = allBytes[index : index+1]
-		module := zerobytes.ToUint8(p)
-		index += 1
-
-		// action 功能细分
-		p = allBytes[index : index+1]
-		action := zerobytes.ToUint8(p)
-		index += 1
-
 		// checksum 校验值
 		if l.whetherChecksum {
+			// 发送端需要设置此标记
 			if flag&zeronetwork.FlagChecksum == 0 {
 				return nil, ErrNoChecksumFlag
 			}
 
-			checksum := [16]byte{}
-			p = allBytes[index : index+16]
+			checksum := [ChecksumLength]byte{}
+			p = allBytes[index : index+ChecksumLength]
 			copy(checksum[:], p)
-			index += 16
+			index += ChecksumLength
 
 			if !l.verifyChecksum(checksum, allBytes, checksumKey) {
 				return nil, ErrVerifyChecksum
 			}
 		}
 
-		// payload 负载
-		var payload []byte
-		if payloadLen > 0 {
-			payload = allBytes[index:]
+		// ---------------------- 消息体(解密、解压) ----------------------
+
+		bodyBytes := allBytes[index:]
+
+		// 解密
+		if flag&zeronetwork.FlagEncrypt != 0 && crypto != nil {
+			bodyBytes, err = crypto.Decrypt(bodyBytes)
+			if err != nil {
+				l.logger.Errorf("decrypt failed, sn: %d, err: %s", sn, err.Error())
+				return nil, ErrDecryptPayload
+			}
 		}
 
-		if len(payload) > 0 {
-			// 解密
-			if flag&zeronetwork.FlagEncrypt != 0 && crypto != nil {
-				payload, err = crypto.Decrypt(payload)
-				if err != nil {
-					l.logger.Errorf("decrypt failed, module: %d, action: %d, err: %s", module, action, err.Error())
-					return nil, ErrDecryptPayload
-				}
+		// 解压
+		if flag&zeronetwork.FlagCompress != 0 && l.compress != nil {
+			bodyBytes, err = l.compress.Uncompress(bodyBytes)
+			if err != nil {
+				l.logger.Errorf("decompress failed, sn: %d, err: %s", sn, err.Error())
+				return nil, ErrDecompressPayload
 			}
+		}
 
-			// 解压
-			if flag&zeronetwork.FlagCompress != 0 && l.compress != nil {
-				payload, err = l.compress.Uncompress(payload)
-				if err != nil {
-					l.logger.Errorf("decompress failed, module: %d, action: %d, err: %s", module, action, err.Error())
-					return nil, ErrDecompressPayload
-				}
-			}
+		index = 0
+
+		// code 错误码
+		code := uint16(0)
+		index += 2
+
+		// module 功能模块
+		p = bodyBytes[index : index+1]
+		module := zerobytes.ToUint8(p)
+		index += 1
+
+		// action 功能细分
+		p = bodyBytes[index : index+1]
+		action := zerobytes.ToUint8(p)
+		index += 1
+
+		// payload 负载
+		var payload []byte
+		if bodyLen-4 > 0 {
+			payload = bodyBytes[index:]
 		}
 
 		// 组装一个消息
@@ -403,9 +445,10 @@ func (l *ltd) Unpack(buffer *zeroringbytes.RingBytes, crypto zeronetwork.Crypto,
 	return messages, nil
 }
 
-func (l *ltd) verifyChecksum(checksum [16]byte, allBytes, checksumKey []byte) bool {
+func (l *ltd) verifyChecksum(checksum [ChecksumLength]byte, allBytes, checksumKey []byte) bool {
 	// 将填写检验值部分置 0
-	for i := 10; i < 26; i++ {
+	checksumStartIndex := l.HeadLen() - ChecksumLength
+	for i := checksumStartIndex; i < checksumStartIndex+ChecksumLength; i++ {
 		allBytes[i] = 0
 	}
 	calcChecksum := zerocrypto.HmacMd5ByteToByte(allBytes, checksumKey)
@@ -424,10 +467,19 @@ func (l *ltd) verifyChecksum(checksum [16]byte, allBytes, checksumKey []byte) bo
 }
 
 var bufferPool *sync.Pool
+var messagePool *sync.Pool
 
 func init() {
 	bufferPool = &sync.Pool{}
 	bufferPool.New = func() interface{} {
 		return &bytes.Buffer{}
+	}
+
+	messagePool = &sync.Pool{}
+	messagePool.New = func() interface{} {
+		return &ltdMessage{
+			head: &ltdMessageHead{},
+			body: &ltdMessageBody{},
+		}
 	}
 }

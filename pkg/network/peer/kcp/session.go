@@ -269,9 +269,9 @@ func (s *session) recvLoop() {
 	// buffer 用于读取 socket 中的数据
 	buffer := make([]byte, recvBufferSize)
 
-	// circleBuffer 用于存储从 socket 读取的数据
-	circleBuffer := zeroringbytes.New(recvBufferSize * 2)
-	circleBuffer.Reset()
+	// ringBytesBuffer 用于存储从 socket 读取的数据
+	ringBytesBuffer := zeroringbytes.New(recvBufferSize * 2)
+	ringBytesBuffer.Reset()
 
 	for {
 		if s.config.RecvDeadline > 0 {
@@ -306,15 +306,15 @@ func (s *session) recvLoop() {
 			break
 		}
 
-		// 在 circleBuffer 中存储所有收到的消息
-		// 需要注意的是，尚未处理的消息 + 收到的 buffer 的长度不得超过 circleBuffer 的长度
-		err = circleBuffer.WriteN(buffer, size)
+		// 在 ringBytesBuffer 中存储所有收到的消息
+		// 需要注意的是，尚未处理的消息 + 收到的 buffer 的长度不得超过 ringBytesBuffer 的长度
+		err = ringBytesBuffer.WriteN(buffer, size)
 		if err != nil {
 			s.config.Logger.Errorf("session: %d, write to circle buffer failed: %s", s.ID(), err.Error())
 			break
 		}
 
-		messages, err := s.config.Datapack.Unpack(circleBuffer, s.crypto, s.checksumKey)
+		messages, err := s.config.Datapack.Unpack(ringBytesBuffer, s.crypto, s.checksumKey)
 		if err != nil {
 			s.config.Logger.Errorf("session: %d unpack failed: %s", s.ID(), err.Error())
 			break
@@ -345,6 +345,10 @@ func (s *session) dispatchLoop() {
 	for {
 		select {
 		case message, ok := <-s.recvQueue:
+			if message != nil {
+				defer message.Release()
+			}
+
 			if !ok {
 				break
 			}
@@ -382,6 +386,10 @@ func (s *session) sendLoop() {
 	for {
 		select {
 		case element, ok := <-s.sendQueue:
+			if element != nil && element.message != nil {
+				defer element.message.Release()
+			}
+
 			if !ok {
 				s.config.Logger.Errorf("session: %d, sendQueue error", s.ID())
 				return

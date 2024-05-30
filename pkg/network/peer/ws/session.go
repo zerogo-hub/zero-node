@@ -262,9 +262,9 @@ func (s *session) recvLoop() {
 
 	recvBufferSize := s.config.RecvBufferSize
 
-	// circleBuffer 用于存储从 socket 读取的数据
-	circleBuffer := zeroringbytes.New(recvBufferSize * 2)
-	circleBuffer.Reset()
+	// ringBytesBuffer 用于存储从 socket 读取的数据
+	ringBytesBuffer := zeroringbytes.New(recvBufferSize * 2)
+	ringBytesBuffer.Reset()
 
 	var buffer []byte
 	var err error
@@ -282,15 +282,15 @@ func (s *session) recvLoop() {
 			break
 		}
 
-		// 在 circleBuffer 中存储所有收到的消息
-		// 需要注意的是，尚未处理的消息 + 收到的 buffer 的长度不得超过 circleBuffer 的长度
-		err = circleBuffer.WriteN(buffer, len(buffer))
+		// 在 ringBytesBuffer 中存储所有收到的消息
+		// 需要注意的是，尚未处理的消息 + 收到的 buffer 的长度不得超过 ringBytesBuffer 的长度
+		err = ringBytesBuffer.WriteN(buffer, len(buffer))
 		if err != nil {
 			s.config.Logger.Errorf("session: %d, write to circle buffer failed: %s", s.ID(), err.Error())
 			break
 		}
 
-		messages, err := s.config.Datapack.Unpack(circleBuffer, s.crypto, s.checksumKey)
+		messages, err := s.config.Datapack.Unpack(ringBytesBuffer, s.crypto, s.checksumKey)
 		if err != nil {
 			s.config.Logger.Errorf("session: %d unpack failed: %s", s.ID(), err.Error())
 			break

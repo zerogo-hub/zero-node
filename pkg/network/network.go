@@ -225,6 +225,9 @@ type Message interface {
 
 	// String 打印消息
 	String() string
+
+	// Release 释放资源
+	Release()
 }
 
 // Crypto 加密与解密接口
