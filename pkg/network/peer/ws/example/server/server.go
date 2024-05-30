@@ -124,7 +124,7 @@ func (s *server) reqSayHello(message zeronetwork.Message) (zeronetwork.Message, 
 
 	// 响应
 	res, err := s.codec.Marshal(&protocol.Resp1{
-		Word: "respone from server",
+		Word: "Hello MyClient",
 	})
 	if err != nil {
 		return nil, err
